@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Jobs - Voice Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: monospace;
+            background-color: #fff;
+            color: #000;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .card {
+            border: 1px solid #000;
+            padding: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: normal;
+            letter-spacing: 8px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .header p {
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .table th,
+        .table td {
+            padding: 10px;
+            border: 1px solid #000;
+            font-size: 12px;
+            text-align: left;
+        }
+        
+        .table th {
+            background: #000;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+        
+        .table td {
+            background: #fff;
+        }
+        
+        .table tr:hover td {
+            background: #f0f0f0;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border: 1px solid #000;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .badge-pending {
+            background: #fff;
+            color: #000;
+        }
+        
+        .badge-processing {
+            background: #ccc;
+            color: #000;
+        }
+        
+        .badge-completed {
+            background: #000;
+            color: #fff;
+        }
+        
+        .badge-failed {
+            background: #fff;
+            color: #000;
+            border-color: #999;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 5px 10px;
+            border: 1px solid #000;
+            background: #fff;
+            color: #000;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        
+        .btn:hover {
+            background: #000;
+            color: #fff;
+        }
+        
+        .btn-primary {
+            background: #000;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #fff;
+            color: #000;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 10px;
+        }
+        
+        .btn-outline-info,
+        .btn-outline-success {
+            background: #fff;
+            color: #000;
+            border: 1px solid #000;
+        }
+        
+        .btn-outline-info:hover,
+        .btn-outline-success:hover {
+            background: #000;
+            color: #fff;
+        }
+        
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .script-name,
+        .voice-name {
+            font-size: 12px;
+        }
+        
+        .text-muted {
+            color: #666;
+            font-size: 11px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .empty-state-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: #999;
+        }
+        
+        .empty-state h4 {
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .footer {
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            line-height: 1.6;
+            margin-top: 40px;
+        }
+        
+        .footer p {
+            margin: 5px 0;
+        }
+        
+        .audio-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .audio-container {
+            background: #fff;
+            border: 1px solid #000;
+            padding: 40px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-modal::after {
+            content: '×';
+            font-family: monospace;
+            font-size: 24px;
+        }
+        
+        .audio-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+        }
+        
+        .custom-audio-player {
+            padding: 20px;
+            border: 1px solid #000;
+        }
+        
+        .audio-player-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .audio-player-control-btn {
+            width: 40px;
+            height: 40px;
+            background: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .audio-player-control-btn:hover {
+            background: #fff;
+            color: #000;
+            border: 1px solid #000;
+        }
+        
+        .audio-player-control-btn::after {
+            content: '▶';
+            font-family: monospace;
+        }
+        
+        .audio-player-control-btn.paused::after {
+            content: '||';
+        }
+        
+        .audio-timeline {
+            flex-grow: 1;
+            height: 2px;
+            background: #ccc;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .audio-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: #000;
+            width: 0;
+        }
+        
+        .audio-time {
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        
+        .d-flex {
+            display: flex;
+        }
+        
+        .justify-content-center {
+            justify-content: center;
+        }
+        
+        .mt-4 {
+            margin-top: 40px;
+        }
+        
+        .mb-3 {
+            margin-bottom: 30px;
+        }
+        
+        .me-2 {
+            margin-right: 20px;
+        }
+        
+        /* Hide all icons */
+        .fas, .far {
+            display: none;
+        }
+        
+        /* Override for empty state icon */
+        .empty-state-icon .fas {
+            display: block;
+        }
+        
+        .empty-state-icon .fas::before {
+            content: '□';
+            font-family: monospace;
+            font-size: 60px;
+        }
+        
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 20px 10px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .table th,
+            .table td {
+                padding: 8px;
+                font-size: 11px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .audio-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>My Jobs</h1>
+            <p>Manage your voice generation history</p>
+        </div>
+        
+        <div class="card">
+            {% if jobs %}
+            <h4 class="section-title mb-3">Recent Jobs</h4>
+            
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Script</th>
+                            <th>Voice</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job_id, job in jobs.items() %}
+                        <tr>
+                            <td>
+                                <div class="script-name">
+                                    {{ job.script_file.split('/')[-1].split('\\')[-1] }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="voice-name">
+                                    {% set voice_id = job.voice_id %}
+                                    {% for voice in voices %}
+                                        {% if voice.id == voice_id %}
+                                            {{ voice.name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if job.status == 'pending' %}
+                                <span class="status-badge badge-pending">Pending</span>
+                                {% elif job.status == 'processing' %}
+                                <span class="status-badge badge-processing">Processing</span>
+                                {% elif job.status == 'completed' %}
+                                <span class="status-badge badge-completed">Completed</span>
+                                {% elif job.status == 'failed' %}
+                                <span class="status-badge badge-failed">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ job.start_time|int|strftime }}</small>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    {% if job.status == 'completed' %}
+                                    <button class="btn btn-sm btn-outline-info icon-btn preview-audio" data-job-id="{{ job_id }}">
+                                        Play
+                                    </button>
+                                    <a href="{{ url_for('download_file', job_id=job_id) }}" class="btn btn-sm btn-outline-success icon-btn">
+                                        Download
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <h4>No Jobs Found</h4>
+                <p>You haven't created any voice generation jobs yet.</p>
+                <a href="/" class="btn btn-primary icon-btn">
+                    Create Your First Job
+                </a>
+            </div>
+            {% endif %}
+            
+            <div class="d-flex justify-content-center mt-4">
+                <a href="/" class="btn btn-primary icon-btn">
+                    Create New Job
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Create natural-sounding voice content with our advanced AI voice generation technology.</p>
+            <p>&copy; 2025 Voice Generator. All rights reserved.</p>
+        </div>
+    </div>
+    
+    <!-- Audio Player Modal -->
+    <div class="audio-modal" id="audioModal">
+        <div class="audio-container">
+            <button class="close-modal" id="closeModal">
+            </button>
+            <h4 class="audio-title" id="audioTitle">Preview Audio</h4>
+            
+            <div class="custom-audio-player">
+                <audio id="audioPlayer" preload="metadata"></audio>
+                
+                <div class="audio-player-controls">
+                    <button class="audio-player-control-btn" id="playPauseBtn">
+                    </button>
+                    <div class="audio-timeline" id="audioTimeline">
+                        <div class="audio-progress" id="audioProgress"></div>
+                    </div>
+                    <span class="audio-time" id="audioTime">0:00 / 0:00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    
+    <script>
+        // Custom audio player functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard script loaded');
+            
+            const modal = document.getElementById('audioModal');
+            const closeBtn = document.getElementById('closeModal');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const playBtn = document.getElementById('playPauseBtn');
+            const audioProgress = document.getElementById('audioProgress');
+            const audioTimeline = document.getElementById('audioTimeline');
+            const audioTime = document.getElementById('audioTime');
+            
+            console.log('Modal:', modal);
+            console.log('Play button:', playBtn);
+            console.log('Audio player:', audioPlayer);
+            
+            // Handle play buttons for each job
+            document.querySelectorAll('.preview-audio').forEach(btn => {
+                console.log('Found preview button:', btn);
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Preview button clicked');
+                    
+                    const jobId = this.getAttribute('data-job-id');
+                    console.log('Job ID:', jobId);
+                    
+                    const audioSrc = `/stream-audio/${jobId}`;
+                    console.log('Audio source:', audioSrc);
+                    
+                    // Show modal and load audio
+                    modal.style.display = 'flex';
+                    audioPlayer.src = audioSrc;
+                    
+                    // Update modal title with job ID
+                    document.getElementById('audioTitle').textContent = `Preview Audio - Job ${jobId}`;
+                    
+                    console.log('Modal should be visible now');
+                });
+            });
+            
+            // Close modal
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    console.log('Close button clicked');
+                    modal.style.display = 'none';
+                    audioPlayer.pause();
+                    audioPlayer.src = '';
+                });
+            }
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    console.log('Modal background clicked');
+                    modal.style.display = 'none';
+                    audioPlayer.pause();
+                    audioPlayer.src = '';
+                }
+            });
+            
+            if (playBtn && audioPlayer) {
+                console.log('Setting up audio player controls');
+                let isPlaying = false;
+                
+                playBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Play/pause button clicked, isPlaying:', isPlaying);
+                    
+                    if (isPlaying) {
+                        audioPlayer.pause();
+                        this.classList.add('paused');
+                        isPlaying = false;
+                        console.log('Pausing audio');
+                    } else {
+                        audioPlayer.play().then(() => {
+                            console.log('Audio playing');
+                        }).catch(err => {
+                            console.error('Error playing audio:', err);
+                        });
+                        this.classList.remove('paused');
+                        isPlaying = true;
+                    }
+                });
+                
+                audioPlayer.addEventListener('timeupdate', function() {
+                    if (audioPlayer.duration) {
+                        const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                        audioProgress.style.width = progress + '%';
+                        
+                        const currentMinutes = Math.floor(audioPlayer.currentTime / 60);
+                        const currentSeconds = Math.floor(audioPlayer.currentTime % 60);
+                        const totalMinutes = Math.floor(audioPlayer.duration / 60);
+                        const totalSeconds = Math.floor(audioPlayer.duration % 60);
+                        
+                        audioTime.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')} / ${totalMinutes}:${totalSeconds.toString().padStart(2, '0')}`;
+                    }
+                });
+                
+                audioTimeline.addEventListener('click', function(e) {
+                    const rect = this.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    audioPlayer.currentTime = percent * audioPlayer.duration;
+                });
+                
+                audioPlayer.addEventListener('ended', function() {
+                    playBtn.classList.add('paused');
+                    isPlaying = false;
+                    console.log('Audio ended');
+                });
+                
+                audioPlayer.addEventListener('pause', function() {
+                    playBtn.classList.add('paused');
+                    isPlaying = false;
+                    console.log('Audio paused');
+                });
+                
+                audioPlayer.addEventListener('play', function() {
+                    playBtn.classList.remove('paused');
+                    isPlaying = true;
+                    console.log('Audio playing');
+                });
+                
+                audioPlayer.addEventListener('loadedmetadata', function() {
+                    console.log('Audio metadata loaded');
+                });
+                
+                audioPlayer.addEventListener('error', function(e) {
+                    console.error('Audio error:', e);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

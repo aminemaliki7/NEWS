@@ -1,0 +1,379 @@
+/* marketing.css - Enhanced styling for the Marketing Script Generator */
+
+:root {
+    --primary-color: #6c5ce7;
+    --primary-light: #a29bfe;
+    --primary-dark: #5540c4;
+    --accent-color: #fd79a8;
+    --soft-accent: rgba(108, 92, 231, 0.1);
+    --text-color: #333;
+    --text-light: #666;
+    --gray-light: #f5f6fa;
+    --gray-medium: #dfe4ea;
+    --gray-dark: #777;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --danger-color: #e74c3c;
+}
+
+/* Marketing form styling */
+.marketing-info {
+    background-color: var(--gray-light);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.marketing-info-title {
+    color: var(--primary-dark);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.marketing-info-text {
+    color: var(--text-light);
+    margin-bottom: 0;
+    line-height: 1.5;
+}
+
+.section-title {
+    color: var(--primary-dark);
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gray-medium);
+}
+
+.form-tip {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-top: 6px;
+}
+
+.parameter-container {
+    margin-bottom: 25px;
+}
+
+.parameter-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.parameter-label .value {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.three-col-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 5px;
+}
+
+.param-info {
+    font-size: 0.75rem;
+    color: var(--gray-dark);
+    margin-top: 8px;
+}
+
+/* Script length selector */
+.script-length-selector {
+    display: flex;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.script-length-selector input[type="radio"] {
+    display: none;
+}
+
+.script-length-selector label {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    border: 1px solid var(--gray-medium);
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.script-length-selector label:first-of-type {
+    border-radius: 4px 0 0 4px;
+}
+
+.script-length-selector label:last-of-type {
+    border-radius: 0 4px 4px 0;
+}
+
+.script-length-selector label small {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--gray-dark);
+    margin-top: 2px;
+}
+
+.script-length-selector input[type="radio"]:checked + label {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-dark);
+}
+
+.script-length-selector input[type="radio"]:checked + label small {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Callout styling */
+.callout {
+    padding: 15px;
+    border-radius: 6px;
+    background-color: rgba(253, 121, 168, 0.1);
+    border-left: 4px solid var(--accent-color);
+    margin-bottom: 25px;
+}
+
+.callout p {
+    margin-bottom: 0;
+    color: var(--text-color);
+}
+
+/* Script output styling */
+.script-output-container {
+    margin-top: 30px;
+    border-top: 1px solid var(--gray-medium);
+    padding-top: 25px;
+}
+
+.script-paragraph {
+    margin-bottom: 15px;
+    line-height: 1.6;
+}
+
+.options-toggle {
+    color: var(--primary-color);
+    cursor: pointer;
+    transition: color 0.2s;
+    font-size: 0.9rem;
+}
+
+.options-toggle:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.tts-options {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: var(--gray-light);
+    border-radius: 8px;
+    display: none;
+}
+
+/* Template section styling */
+.template-section {
+    margin-top: 40px;
+    border-top: 1px solid var(--gray-medium);
+    padding-top: 25px;
+}
+
+/* Enhanced UI components */
+
+/* AI Suggestions dropdown */
+.suggestion-dropdown {
+    position: relative;
+    margin-top: 10px;
+    border: 1px solid var(--primary-light);
+    border-radius: 6px;
+    background-color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.suggestion-header {
+    padding: 8px 12px;
+    background-color: var(--soft-accent);
+    border-bottom: 1px solid var(--gray-medium);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 6px 6px 0 0;
+}
+
+.suggestion-body {
+    padding: 12px;
+    font-weight: 500;
+}
+
+.suggestion-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--gray-medium);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Word counter styling */
+.word-counter-container {
+    text-align: right;
+    margin-bottom: 15px;
+}
+
+.word-counter {
+    display: inline-block;
+    font-size: 0.85rem;
+    color: var(--gray-dark);
+    background-color: var(--gray-light);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.word-counter .separator {
+    margin: 0 8px;
+    color: var(--gray-medium);
+}
+
+.word-counter #wordCount,
+.word-counter #speechTime {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* Edit mode styling */
+.edit-mode-container {
+    margin-top: 10px;
+}
+
+#editScriptTextarea {
+    min-height: 200px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* A/B Test variants styling */
+.ab-test-container {
+    animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.variant-script {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.variant-script p {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+/* Tone analysis styling */
+.tone-analysis {
+    background-color: var(--gray-light);
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.tone-bars {
+    margin-top: 10px;
+}
+
+.tone-metric {
+    margin-bottom: 10px;
+}
+
+.tone-label {
+    font-weight: 500;
+}
+
+.tone-score {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.progress {
+    height: 8px;
+    margin-top: 5px;
+}
+
+.progress-bar {
+    background-color: var(--primary-color);
+}
+
+.tone-tip {
+    color: var(--gray-dark);
+}
+
+/* History button styling */
+.history-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.history-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .script-length-selector label {
+        padding: 8px 5px;
+        font-size: 0.9rem;
+    }
+    
+    .script-length-selector label small {
+        font-size: 0.65rem;
+    }
+    
+    .history-btn {
+        top: 10px;
+        right: 10px;
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+    
+    .device-frame {
+        width: 220px;
+        height: 400px;
+    }
+}
+
+/* Spinner styling */
+#loadingSpinner {
+    display: none;
+}
+
+/* Suggestion button styling */
+.suggestion-btn {
+    font-size: 0.8rem;
+}
+
+/* Enhanced file input styling */
+.custom-file-container {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.custom-file-input {
+    cursor: pointer;
+    height: auto;
+    padding: 8px 12px;
+}
+
+.custom-file-label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}

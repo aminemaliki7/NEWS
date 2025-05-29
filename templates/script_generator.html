@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Script Generator - Voice Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0068FF;
+            --primary-dark: #0050C0;
+            --secondary: #4D4D4D;
+            --tertiary: #808080;
+            --dark: #000000;
+            --light: #FFFFFF;
+            --gray: #F5F5F7;
+            --gray-dark: #86868b;
+            --success: #2fd471;
+            --background: #000000;
+            --card-bg: #0D0D0D;
+            --input-bg: #1C1C1E;
+            --border-color: #333333;
+        }
+        
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--background);
+            color: var(--light);
+            padding: 0;
+            margin: 0;
+        }
+        
+        .gradient-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 300px;
+            background: linear-gradient(180deg, rgba(30,30,30,1) 0%, rgba(0,0,0,1) 100%);
+            z-index: -1;
+        }
+        
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .header {
+            color: var(--light);
+            margin-bottom: 1.5rem;
+            text-align: center;
+            padding: 1rem 0 2rem;
+        }
+        
+        .header h1 {
+            font-weight: 600;
+            font-size: 2.4rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.015em;
+        }
+        
+        .header p {
+            font-weight: 400;
+            font-size: 1.1rem;
+            opacity: 0.7;
+            letter-spacing: -0.01em;
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: var(--light);
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-control {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            box-shadow: none;
+            transition: all 0.2s ease;
+            background-color: var(--input-bg);
+            color: var(--light);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 104, 255, 0.2);
+            background-color: var(--input-bg);
+        }
+        
+        .form-select {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            box-shadow: none;
+            transition: all 0.2s ease;
+            background-color: var(--input-bg);
+            color: var(--light);
+        }
+        
+        .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 104, 255, 0.2);
+            background-color: var(--input-bg);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            border: none;
+            border-radius: 20px;
+            padding: 0.85rem 1.75rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            letter-spacing: -0.01em;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 104, 255, 0.3);
+        }
+        
+        .btn-outline-secondary {
+            color: var(--light);
+            background-color: rgba(255, 255, 255, 0.08);
+            border: none; 
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-outline-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: var(--light);
+        }
+        
+        .footer {
+            text-align: center;
+            color: var(--gray-dark);
+            font-size: 0.9rem;
+            margin-top: 2rem;
+            opacity: 0.7;
+        }
+        
+        .idea-input {
+            margin-bottom: 1rem;
+        }
+        
+        .idea-input .form-control {
+            border-radius: 10px;
+        }
+        
+        .ideas-container {
+            background-color: rgba(30, 30, 30, 0.5);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .script-preview {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: rgba(30, 30, 30, 0.7);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            border: 1px solid var(--border-color);
+        }
+        
+        .spinner-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        
+        .action-buttons {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        .pro-badge {
+            background-color: var(--primary);
+            color: white;
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--light);
+            letter-spacing: -0.01em;
+        }
+        
+        .voice-parameters {
+            background-color: rgba(30, 30, 30, 0.5);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .parameter-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .parameter-label .value {
+            font-weight: 600;
+            color: var(--light);
+            background-color: rgba(0, 104, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+        
+        .form-range {
+            height: 6px;
+            border-radius: 3px;
+            background-color: var(--border-color);
+        }
+        
+        .form-range::-webkit-slider-thumb {
+            background-color: var(--light);
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--primary);
+        }
+        
+        .tab-content {
+            margin-top: 1.5rem;
+        }
+        
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    <div class="app-container">
+        <div class="header">
+            <h1>AI Script Generator <span class="pro-badge">Pro</span></h1>
+            <p>Create professional scripts from just a title and key ideas</p>
+        </div>
+        
+        <div class="card">
+            <div class="row">
+                <div class="col-md-6">
+                    <h4 class="section-title">
+                        <i class="fas fa-lightbulb me-2" style="color: var(--primary);"></i>
+                        Script Details
+                    </h4>
+                    
+                    <div class="mb-3">
+                        <label for="video-title" class="form-label">Video Title</label>
+                        <input type="text" class="form-control" id="video-title" placeholder="Enter a compelling title...">
+                    </div>
+                    
+                    <div class="ideas-container">
+                        <h5 class="mb-3" style="font-size: 1rem;">Main Ideas (3)</h5>
+                        
+                        <div class="idea-input">
+                            <label class="form-label">
+                                <i class="fas fa-1 me-2" style="color: var(--primary); font-size: 0.8rem;"></i>
+                                First Main Idea
+                            </label>
+                            <input type="text" class="form-control" id="idea1" placeholder="First key point...">
+                        </div>
+                        
+                        <div class="idea-input">
+                            <label class="form-label">
+                                <i class="fas fa-2 me-2" style="color: var(--primary); font-size: 0.8rem;"></i>
+                                Second Main Idea
+                            </label>
+                            <input type="text" class="form-control" id="idea2" placeholder="Second key point...">
+                        </div>
+                        
+                        <div class="idea-input">
+                            <label class="form-label">
+                                <i class="fas fa-3 me-2" style="color: var(--primary); font-size: 0.8rem;"></i>
+                                Third Main Idea
+                            </label>
+                            <input type="text" class="form-control" id="idea3" placeholder="Third key point...">
+                        </div>
+                    </div>
+                    
+                    <!-- Voice Settings -->
+                    <div class="voice-parameters">
+                        <h5 class="mb-3" style="font-size: 1rem;">Voice Settings</h5>
+                        
+                        <div class="mb-3">
+                            <label for="language" class="form-label">Language</label>
+                            <select class="form-select" id="language" onchange="updateVoices()">
+                                {% for language in languages %}
+                                <option value="{{ language }}">{{ language }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="voice" class="form-label">Voice</label>
+                            <select class="form-select" id="voice" name="voice">
+                                {% for voice in voices %}
+                                <option value="{{ voice.id }}" data-language="{{ voice.language }}">{{ voice.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        <button class="btn btn-primary" id="generate-btn" onclick="generateScript()">
+                            <i class="fas fa-wand-magic-sparkles me-2"></i>
+                            Generate Script
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h4 class="section-title">
+                        <i class="fas fa-file-lines me-2" style="color: var(--primary);"></i>
+                        Generated Script
+                    </h4>
+                    
+                    <div id="script-container">
+                        <div class="text-center p-5 text-muted">
+                            <i class="fas fa-pen-to-square mb-3" style="font-size: 2rem; opacity: 0.5;"></i>
+                            <p>Your generated script will appear here</p>
+                            <p style="font-size: 0.9rem;">Fill in the details and click "Generate Script"</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Initially hidden action buttons -->
+                    <div class="action-buttons" id="action-buttons" style="display: none;">
+                        <button class="btn btn-outline-secondary icon-btn" onclick="editScript()">
+                            <i class="fas fa-edit"></i>
+                            Edit
+                        </button>
+                        <button class="btn btn-primary icon-btn" onclick="useScript()">
+                            <i class="fas fa-microphone"></i>
+                            Create Voice
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-center mt-4">
+            <a href="/" class="btn btn-outline-secondary icon-btn">
+                <i class="fas fa-arrow-left"></i>
+                Back to Voice Generator
+            </a>
+        </div>
+        
+        <div class="footer">
+            <p>Create professional scripts and voice content with our advanced AI technology.</p>
+            <p>&copy; 2025 Voice Generator. All rights reserved.</p>
+        </div>
+    </div>
+    
+    <script>
+        function updateVoices() {
+            const languageSelect = document.getElementById("language");
+            const voiceSelect = document.getElementById("voice");
+            const selectedLanguage = languageSelect.value;
+            
+            // Hide all options first
+            for (let i = 0; i < voiceSelect.options.length; i++) {
+                const option = voiceSelect.options[i];
+                const voiceLanguage = option.getAttribute("data-language");
+                
+                if (voiceLanguage === selectedLanguage) {
+                    option.style.display = "";
+                } else {
+                    option.style.display = "none";
+                }
+            }
+            
+            // Select the first visible option
+            for (let i = 0; i < voiceSelect.options.length; i++) {
+                const option = voiceSelect.options[i];
+                if (option.style.display !== "none") {
+                    voiceSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        function generateScript() {
+            const title = document.getElementById('video-title').value.trim();
+            const idea1 = document.getElementById('idea1').value.trim();
+            const idea2 = document.getElementById('idea2').value.trim();
+            const idea3 = document.getElementById('idea3').value.trim();
+            
+            // Basic validation
+            if (!title) {
+                alert('Please enter a video title');
+                return;
+            }
+            
+            // Show loading spinner
+            const scriptContainer = document.getElementById('script-container');
+            scriptContainer.innerHTML = `
+                <div class="spinner-container">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="ms-3">Generating your script...</span>
+                </div>
+            `;
+            
+            // Disable generate button
+            const generateBtn = document.getElementById('generate-btn');
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating...';
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('idea1', idea1);
+            formData.append('idea2', idea2);
+            formData.append('idea3', idea3);
+            
+            // Send request to backend
+            fetch('/generate-script', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Re-enable button
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles me-2"></i> Generate Script';
+                
+                if (data.error) {
+                    scriptContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            Error: ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Display the generated script
+                scriptContainer.innerHTML = `
+                    <div class="script-preview" id="script-text">
+                        ${data.script.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+                
+                // Show action buttons
+                document.getElementById('action-buttons').style.display = 'flex';
+                
+                // Store the script text in a hidden field for later use
+                if (!document.getElementById('hidden-script')) {
+                    const hiddenField = document.createElement('input');
+                    hiddenField.type = 'hidden';
+                    hiddenField.id = 'hidden-script';
+                    document.body.appendChild(hiddenField);
+                }
+                document.getElementById('hidden-script').value = data.script;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles me-2"></i> Generate Script';
+                
+                scriptContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        An error occurred while generating the script. Please try again.
+                    </div>
+                `;
+            });
+        }
+        
+        function editScript() {
+            const scriptText = document.getElementById('hidden-script').value;
+            const scriptContainer = document.getElementById('script-container');
+            
+            scriptContainer.innerHTML = `
+                <textarea class="form-control text-area" id="edited-script" rows="15" style="min-height: 400px;">${scriptText}</textarea>
+                <button class="btn btn-primary mt-3" onclick="saveEdit()">
+                    <i class="fas fa-save me-2"></i>
+                    Save Changes
+                </button>
+            `;
+            
+            // Hide action buttons while editing
+            document.getElementById('action-buttons').style.display = 'none';
+        }
+        
+        function saveEdit() {
+            const editedText = document.getElementById('edited-script').value;
+            const scriptContainer = document.getElementById('script-container');
+            
+            // Update the displayed script
+            scriptContainer.innerHTML = `
+                <div class="script-preview" id="script-text">
+                    ${editedText.replace(/\n/g, '<br>')}
+                </div>
+            `;
+            
+            // Update the hidden field
+            document.getElementById('hidden-script').value = editedText;
+            
+            // Show action buttons again
+            document.getElementById('action-buttons').style.display = 'flex';
+        }
+        
+        function useScript() {
+    // Get the script text
+    const scriptText = document.getElementById('hidden-script').value;
+    
+    // Get voice settings
+    const voiceId = document.getElementById('voice').value;
+    
+    // Get the title (use video title as the title for the voice file)
+    const title = document.getElementById('video-title').value.trim();
+    
+    // Create a form to submit to the voice generator
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/upload';
+    
+    // Create hidden fields with all required parameters
+    const fields = {
+        'input-method': 'text',
+        'text-content': scriptText,
+        'voice': voiceId,
+        'speed': 1.0,        // Default speed
+        'depth': 1,         // Default depth
+        'title': title      // Add title field
+    };
+    
+    // Add all fields to form
+    for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    }
+    
+    // Add form to body and submit
+    document.body.appendChild(form);
+    form.submit();
+}
+        
+        // Initialize on page load
+        document.addEventListener("DOMContentLoaded", function() {
+            updateVoices();
+        });
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
