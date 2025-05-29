@@ -630,3 +630,43 @@ if __name__ == "__main__":
     print("\nGenerated YouTube Script:")
     print(result['script'])
     print(f"\nWord Count: {result['word_count']}")
+
+
+def wrap_script_with_ssml(script_text, default_rate="medium", default_pitch="0%"):
+    """
+    Wraps a plain script with basic SSML prosody, structure, and pauses.
+    
+    Args:
+        script_text (str): The raw script to enhance
+        default_rate (str): SSML rate (e.g. "medium", "slow")
+        default_pitch (str): SSML pitch (e.g. "0%", "-2%")
+    
+    Returns:
+        str: SSML-enhanced version of the script
+    """
+    # Break script into paragraphs
+    paragraphs = script_text.strip().split("\n\n")
+    
+    ssml_parts = ['<speak>']
+    
+    for para in paragraphs:
+        # Slight pause between paragraphs
+        ssml_parts.append('<p>')
+        
+        # Wrap paragraph with prosody for tone control
+        ssml_parts.append(f'<prosody rate="{default_rate}" pitch="{default_pitch}">')
+        
+        # Add a pause after bullet lists
+        if para.strip().startswith("•"):
+            lines = para.splitlines()
+            for line in lines:
+                clean = line.lstrip("•").strip()
+                ssml_parts.append(f'<s>{clean}</s><break time="300ms"/>')
+        else:
+            ssml_parts.append(f"{para.strip()}")
+        
+        ssml_parts.append('</prosody>')
+        ssml_parts.append('</p>')
+    
+    ssml_parts.append('</speak>')
+    return "\n".join(ssml_parts)
