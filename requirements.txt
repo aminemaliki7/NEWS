@@ -4,7 +4,10 @@ python-dotenv
 gunicorn
 google-generativeai
 gTTS
+edge-tts
 pydub
-openai
 feedparser
 beautifulsoup4
+openai
+asyncio
+aiofiles
