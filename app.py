@@ -120,7 +120,7 @@ def run_async_task(coroutine, job_id):
 def index():
     # Check if there's a prefill parameter
     prefill = request.args.get('prefill', '')
-    return render_template('index.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES, prefill=prefill)
+    return render_template('news.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES, prefill=prefill)
 
 # Update the upload route to store the title
 @app.route('/upload', methods=['POST'])
