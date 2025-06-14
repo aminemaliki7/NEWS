@@ -223,71 +223,7 @@ def upload_file():
     
     return redirect(url_for('job_status', job_id=job_id))
 
-@app.route('/ssml')
-def ssml_page():
-    return render_template('ssml.html', voices=AVAILABLE_VOICES)
 
-@app.route('/upload-ssml', methods=['POST'])
-def upload_ssml():
-    # Get form data
-    ssml_content = request.form.get('ssml-content', '').strip()
-    voice_id = request.form.get('voice', 'en-US-JennyNeural')
-    
-    if not ssml_content:
-        return render_template('error.html', message="No SSML provided. Please enter SSML markup to convert to speech.")
-    
-    # Make sure the SSML is properly formatted
-    if not ssml_content.startswith('<speak') or not ssml_content.endswith('</speak>'):
-        ssml_content = f'<speak>{ssml_content}</speak>'
-    
-    # Generate a unique job ID
-    job_id = generate_unique_id()
-    
-    # Create temp directories if they don't exist
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
-    
-    # Save the SSML to a temporary file
-    script_filename = f"ssml_input_{job_id}.xml"
-    script_path = os.path.join(app.config['UPLOAD_FOLDER'], script_filename)
-    
-    with open(script_path, 'w', encoding='utf-8') as f:
-        f.write(ssml_content)
-    
-    # Output file setup
-    output_filename = f"tts_{job_id}.mp3"
-    output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-    
-    # Initialize job status
-    jobs[job_id] = {
-        'status': 'pending',
-        'script_file': script_path,
-        'output_file': output_path,
-        'start_time': time.time(),
-        'input_type': 'ssml',
-        'is_ssml': True,
-        'voice_id': voice_id
-    }
-    
-    # Start the processing task in a background thread
-    process_task = generate_simple_tts(
-        script_path, output_path, voice_id, 1.0, 1, True
-    )
-    
-    thread = threading.Thread(
-        target=run_async_task,
-        args=(process_task, job_id)
-    )
-    thread.daemon = True
-    thread.start()
-    
-    # Store job ID in session
-    if 'jobs' not in session:
-        session['jobs'] = []
-    session['jobs'].append(job_id)
-    session.modified = True
-    
-    return redirect(url_for('job_status', job_id=job_id))
 
 @app.route('/status/<job_id>')
 def job_status(job_id):
@@ -380,156 +316,7 @@ def shorts_generator():
     """Route for the AI shorts script generator page"""
     return render_template('shorts_generator.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES)
 
-@app.route('/generate-shorts-script', methods=['POST'])
-def generate_shorts_script():
-    # Get data from request
-    topic = request.form.get('topic', '').strip()
-    
-    if not topic:
-        return jsonify({'error': 'Please provide a topic'}), 400
-    
-    # Configure prompt for Gemini
-    prompt = f"""
-Write a short voiceover script for a YouTube Short (30–60 seconds) that feels deep, timeless, and quietly powerful — like a secret worth remembering. The style should feel calm and wise, similar to Robert Greene, but written in simple English that anyone at a B2 level can understand.
 
-TOPIC: {topic}
-
-Guidelines:
-
-    Script must be between 60–75 words (about 30–60 seconds aloud)
-    
-    adapt the tone to be calm, wise, and reflective — like a quiet truth being shared
-
-    use a simple, conversational style that feels like a friend sharing a secret
-
-    adapte rick rubin's style: "The best way to get what you want is to help others get what they want."
-    Use a calm, wise tone that feels timeless and deep but is easy to understand
-    Use simple, relatable language that anyone can grasp
-
-    Use very simple
-
-    Start with a hook that feels mysterious, wise, or quietly intense — something that stops the scroll
-
-    Speak like a calm, trusted voice — slow, thoughtful, like someone sharing a quiet truth
-
-    Avoid clichés, hype, or big motivational phrases
-
-    Use contrast, irony, or surprising insight — reveal something hidden in plain sight
-
-    Keep flow natural and smooth — short sentences, no complex grammar
-
-    End with a soft, reflective thought or a warm call to action that invites the viewer to think or feel something
-
-    NO bullet points, formatting, brackets, or special characters — just clean voiceover text.no much pauses in the text
-
-    The output must only be the spoken script, ready for an AI or human voiceover
-    
-
-It should feel cinematic, reflective, and easy to understand — like wisdom told simply.
-
-
-"""
-    
-    try:
-        # Configure the Gemini API with your key
-        setup_gemini_api(app.config['GEMINI_API_KEY'])
-           
-        # Generate content with Gemini
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
-       
-        # Extract the generated text
-        script_text = response.text
-       
-        # Return the generated script
-        return jsonify({
-            'success': True,
-            'script': script_text
-        })
-    
-    except Exception as e:
-        print(f"Error generating shorts script: {e}")
-        return jsonify({'error': 'Failed to generate script. Please try again later.'}), 500
-
-@app.route('/generate-script', methods=['POST'])
-def generate_script():
-    # Get data from request
-    title = request.form.get('title', '').strip()
-    idea1 = request.form.get('idea1', '').strip()
-    idea2 = request.form.get('idea2', '').strip()
-    idea3 = request.form.get('idea3', '').strip()
-    
-    if not title:
-        return jsonify({'error': 'Please provide a video title'}), 400
-    
-    # Configure prompt for Gemini
-    prompt = f"""
-Create a conversational, engaging script for a short educational video that:
-
-1) Teaches a practical concept, hack, or mental model in a direct, no-fluff style
-2) Uses simple language that flows naturally when spoken aloud
-3) Follows a clear structure: hook → explanation → examples → application → call-to-action
-
-TITLE: {title}
-
-Script Requirements:
-- Start with a striking hook that challenges assumptions (e.g., "You don't need to be creative to come up with creative ideas...")
-- Speak directly to the viewer using "you" statements throughout
-- Explain concepts using everyday language as if talking to a friend
-- Include specific, relatable examples that prove your point (like Jobs/iPhone, Shakespeare/stories)
-- Break down the concept into a simple process anyone can follow
-- Add unexpected connections or surprising insights that create "aha" moments
-- End with practical application advice that viewers can implement immediately
-
-Style Guide:
-- Write in short, punchy sentences that maintain momentum
-- Create a natural speaking rhythm with varied sentence length
-- Avoid all formatting (no lists, bullet points, headings, or special characters)
-- Use contractions and casual phrasing for a conversational feel
-- Include subtle transitions between ideas that flow logically
-- Incorporate rhetorical questions that make viewers think
-- Blend authoritative knowledge with friendly, accessible tone
-- Include specific action steps within the natural flow of speech
-- Keep the entire script between 300-400 words for a 2-3 minute video
-
-CONTENT STRUCTURE:
-1. Hook challenging a common belief about {idea1}
-2. Simple explanation of the concept/process behind {idea2}
-3. Real-world examples showing the concept in action
-4. Step-by-step method viewers can apply to {idea3}
-5. Quick demonstration of the method with a specific example
-6. Final takeaway reinforcing how accessible/powerful this approach is
-
-Return ONLY the clean, ready-to-record script with no additional text or formatting.
-"""
-
-    
-    try:
-        # Configure the Gemini API with your key
-        # No need to check if API key is set - just configure it each time
-        setup_gemini_api(app.config['GEMINI_API_KEY'])
-           
-        # Generate content with Gemini
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
-       
-        # Extract the generated text
-        script_text = response.text
-       
-        # Return the generated script
-        return jsonify({
-            'success': True,
-            'script': script_text
-        })
-    
-    except Exception as e:
-        print(f"Error generating script: {e}")
-        return jsonify({'error': 'Failed to generate script. Please try again later.'}), 500
-
-@app.route('/script-generator')
-def script_generator():
-    """Route for the AI script generator page"""
-    return render_template('script_generator.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES)
 
 
 
@@ -553,114 +340,7 @@ def convert_to_voice(download_id):
     return redirect(url_for('index', audio_source=download_id))
 
 
-@app.route('/media-downloader')
-def media_downloader():
-    """Route for the media downloader page"""
-    return render_template('media_downloader.html')
 
-
-@app.route('/marketing-generator')
-def marketing_generator():
-    """Route for the marketing script generator page"""
-    return render_template('marketing_generator.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES)
-
-@app.route('/generate-marketing-script', methods=['POST'])
-def generate_marketing_script():
-    # Get data from request
-    content_type = request.form.get('contentType', '').strip()
-    product_name = request.form.get('productName', '').strip()
-    target_audience = request.form.get('targetAudience', '').strip()
-    main_benefit = request.form.get('mainBenefit', '').strip()
-    key_features = request.form.get('keyFeatures', '').strip()
-    call_to_action = request.form.get('callToAction', '').strip()
-    script_length = request.form.get('scriptLength', 'medium').strip()
-    tone = request.form.get('tone', 'professional').strip()
-    additional_info = request.form.get('additionalInfo', '').strip()
-    
-    # Validate required fields
-    if not product_name or not target_audience or not main_benefit:
-        return jsonify({'error': 'Please provide product name, target audience, and main benefit'}), 400
-    
-    # Map script length to word count and duration
-    length_mapping = {
-        'short': "80-120 words (30-60 seconds)",
-        'medium': "150-250 words (1-2 minutes)",
-        'long': "300-450 words (2-3 minutes)"
-    }
-    
-    # Map tone to descriptive text
-    tone_descriptions = {
-        'professional': "professional, authoritative, and trustworthy",
-        'conversational': "friendly, casual, and conversational",
-        'enthusiastic': "energetic, passionate, and excited",
-        'empathetic': "understanding, compassionate, and empathetic",
-        'humorous': "light, engaging, and subtly humorous",
-        'urgent': "urgent, compelling, and action-oriented"
-    }
-    
-    # Configure prompt for Gemini based on script type
-    prompt_prefix = ""
-    
-    if content_type == "product_explainer":
-        prompt_prefix = "Create a persuasive product explainer script that demonstrates features and benefits"
-    elif content_type == "lead_generation":
-        prompt_prefix = "Create a lead generation script focused on collecting contact information in exchange for value"
-    elif content_type == "sales_pitch":
-        prompt_prefix = "Create a direct sales pitch script designed to convert viewers into customers"
-    elif content_type == "testimonial_style":
-        prompt_prefix = "Create a testimonial-style script that tells a success story about using this product"
-    elif content_type == "educational":
-        prompt_prefix = "Create a compelling science-backed explainer script that simplifies complex concepts, hooks viewers with relatable scenarios, and ends with a clear takeaway"
-    
-    # Build the complete prompt
-    prompt = f"""
-{prompt_prefix} for a {tone_descriptions.get(tone, "professional")} marketing video.
-
-PRODUCT: {product_name}
-TARGET AUDIENCE: {target_audience}
-PRIMARY BENEFIT: {main_benefit}
-KEY FEATURES: {key_features}
-CALL TO ACTION: {call_to_action}
-ADDITIONAL CONTEXT: {additional_info}
-
-Guidelines:
-- Script should be {length_mapping.get(script_length, "150-250 words (1-2 minutes)")} when spoken aloud
-- Use a {tone_descriptions.get(tone, "professional")} tone throughout
-- Start with a strong hook that grabs attention
-- Focus on benefits to the audience, not just features
-- Address pain points and how the product solves them
-- Include the call to action clearly and persuasively
-- Use conversational language (avoid jargon unless necessary for the audience)
-- Make the value proposition crystal clear
-- Create emotional connection with the audience when appropriate
-- Use social proof elements if relevant
-- Write in a natural speaking voice with smooth transitions
-- IMPORTANT: Output ONLY the script text, nothing else
-- NO bullet points, NO formatting, NO notes - just clean voiceover text
-
-The script should feel persuasive and compelling, with a clear focus on how {product_name} helps {target_audience} achieve {main_benefit}.
-"""
-    
-    try:
-        # Configure the Gemini API with your key
-        setup_gemini_api(app.config['GEMINI_API_KEY'])
-           
-        # Generate content with Gemini
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
-       
-        # Extract the generated text
-        script_text = response.text
-       
-        # Return the generated script
-        return jsonify({
-            'success': True,
-            'script': script_text
-        })
-    
-    except Exception as e:
-        print(f"Error generating marketing script: {e}")
-        return jsonify({'error': 'Failed to generate script. Please try again later.'}), 500
     
 
 @app.route('/news')
@@ -835,5 +515,169 @@ def generate_news_youtube_script_route():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    
+
+    # Replace your existing stream_temp_audio and generate_summary_audio functions with these:
+
+@app.route('/stream-temp-audio/<path:path>')
+def stream_temp_audio(path):
+    """Stream temporary audio files with proper error handling"""
+    audio_path = os.path.join(app.config['OUTPUT_FOLDER'], path)
+    
+    # Check if file exists
+    if not os.path.exists(audio_path):
+        app.logger.error(f"Audio file not found: {audio_path}")
+        return jsonify({"error": "Audio file not found"}), 404
+    
+    # Check file size (optional - helps identify empty files)
+    try:
+        file_size = os.path.getsize(audio_path)
+        if file_size == 0:
+            app.logger.error(f"Audio file is empty: {audio_path}")
+            return jsonify({"error": "Audio file is empty"}), 404
+    except OSError as e:
+        app.logger.error(f"Error checking file size: {e}")
+        return jsonify({"error": "Error accessing audio file"}), 500
+    
+    try:
+        return send_file(audio_path, mimetype="audio/mpeg")
+    except Exception as e:
+        app.logger.error(f"Error serving audio file {audio_path}: {e}")
+        return jsonify({"error": "Error serving audio file"}), 500
+
+
+@app.route('/api/news/summary-audio', methods=['POST'])
+def generate_summary_audio():
+    """Generate audio from text content with proper error handling"""
+    try:
+        data = request.json
+        content = data.get("content", "")
+        title = data.get("title", "summary")
+        voice_id = data.get("voice_id", "en-CA-LiamNeural")
+        speed = float(data.get("speed", 1.0))
+        depth = int(data.get("depth", 1))
+
+        if not content:
+            return jsonify({"error": "No content provided"}), 400
+
+        # Generate unique timestamp for file naming
+        timestamp = int(time.time())
+        
+        # Save content to temp file
+        script_filename = f"summary_{timestamp}.txt"
+        script_file = os.path.join(app.config['UPLOAD_FOLDER'], script_filename)
+        
+        try:
+            with open(script_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            app.logger.info(f"Content saved to: {script_file}")
+        except Exception as e:
+            app.logger.error(f"Error saving content to file: {e}")
+            return jsonify({"error": "Error saving content"}), 500
+
+        # Generate output path with consistent naming
+        output_filename = f"final_{timestamp}.mp3"  # This matches your error log
+        output_file = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+        
+        app.logger.info(f"Generating voice with {voice_id}, speed={speed}, depth={depth}")
+        app.logger.info(f"Output file will be: {output_file}")
+
+        try:
+            # Call your existing TTS generation
+            import asyncio
+            audio_path = asyncio.run(generate_simple_tts(
+                script_file, output_file, voice_id, speed, depth
+            ))
+            
+            # Verify the file was actually created
+            if not os.path.exists(audio_path):
+                app.logger.error(f"TTS generation failed - file not created: {audio_path}")
+                return jsonify({"error": "Audio generation failed"}), 500
+            
+            # Check if the file has content
+            file_size = os.path.getsize(audio_path)
+            if file_size == 0:
+                app.logger.error(f"TTS generation created empty file: {audio_path}")
+                return jsonify({"error": "Generated audio file is empty"}), 500
+            
+            app.logger.info(f"Audio generated successfully: {audio_path} (size: {file_size} bytes)")
+            
+            # Clean up the temporary script file
+            try:
+                os.remove(script_file)
+            except Exception as e:
+                app.logger.warning(f"Could not clean up temp file: {e}")
+
+            return jsonify({
+                "audio_url": url_for('stream_temp_audio', path=os.path.basename(audio_path)),
+                "file_size": file_size
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error in TTS generation: {e}")
+            return jsonify({"error": f"Audio generation failed: {str(e)}"}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in generate_summary_audio: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# Optional: Add a cleanup function to remove old temp files
+def cleanup_old_files():
+    """Clean up old temporary files (older than 1 hour)"""
+    import time
+    current_time = time.time()
+    cutoff_time = current_time - 3600  # 1 hour ago
+    
+    for folder in [app.config['UPLOAD_FOLDER'], app.config['OUTPUT_FOLDER']]:
+        try:
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                if os.path.isfile(file_path):
+                    file_mtime = os.path.getmtime(file_path)
+                    if file_mtime < cutoff_time:
+                        os.remove(file_path)
+                        app.logger.info(f"Cleaned up old file: {file_path}")
+        except Exception as e:
+            app.logger.error(f"Error during cleanup: {e}")
+
+
+@app.route('/api/news/translate', methods=['POST'])
+def translate_text():
+    """API endpoint to translate text using Gemini."""
+    data = request.json
+    text_to_translate = data.get('text')
+    target_language_code = data.get('target_language') # e.g., 'ar', 'fr', 'es'
+
+    if not text_to_translate or not target_language_code:
+        return jsonify({"error": "Missing 'text' or 'target_language' in request"}), 400
+
+    try:
+        # Use Gemini for translation
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        # Craft a prompt for translation
+        prompt = f"Translate the following English text to {target_language_code} without adding any extra information or conversational filler. Only provide the translated text:\n\n{text_to_translate}"
+        
+        # For simplicity, let's assume direct translation.
+        # For more complex scenarios, you might need to handle context better.
+        response = model.generate_content(prompt)
+        
+        # Extract the translated text. Handle potential errors or empty responses from Gemini.
+        translated_text = response.text.strip()
+        
+        # Simple check for cases where Gemini might return something unexpected
+        if not translated_text:
+            raise ValueError("Gemini returned empty or unparseable translation.")
+
+        return jsonify({"translated_text": translated_text})
+
+    except Exception as e:
+        app.logger.error(f"Error translating text with Gemini: {e}")
+        return jsonify({"error": f"Failed to translate text: {str(e)}"}), 500
+
+
+# Call cleanup periodically (you can set this up with a scheduler)
+# cleanup_old_files()
 if __name__ == '__main__':
     app.run(debug=True)
