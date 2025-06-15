@@ -13,7 +13,6 @@ const newsTemplate = document.getElementById('newsArticleTemplate');
 
 // Keep track of active audio elements for stopping
 let activeAudio = null;
-let activeAudioJobId = null; // This might become less relevant if all audio is direct
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', function() {
@@ -117,6 +116,7 @@ function createArticleElement(article, index) {
     template.querySelector('.source-name').textContent = article.source?.name || 'Unknown Source';
     template.querySelector('.publish-date').textContent = formatDate(article.publishedAt);
     template.querySelector('.article-description').textContent = article.description || 'No description available.';
+    
     const imageEl = template.querySelector('.article-image');
     if (article.image && article.image.startsWith('http')) {
         imageEl.src = article.image;
@@ -132,13 +132,17 @@ function createArticleElement(article, index) {
         imageEl.alt = 'Image not available';
         imageEl.style.display = '';
     }
+    
     template.querySelector('.article-read-btn').href = article.url;
+    
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
     listenBtn.onclick = () => listenToSummary(index);
+    
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
+    
     return template;
 }
 
@@ -160,4 +164,125 @@ document.addEventListener('change', function(e) {
     }
 });
 
+async function listenToSummary(index) {
+    const article = articles[index];
+    const voiceSelect = document.getElementById(`voice-select-${index}`);
+    const selectedVoice = voiceSelect?.value;
+
+    if (!article || !selectedVoice) {
+        console.warn("Missing article or voice.");
+        return;
+    }
+
+    const langCode = selectedVoice.split('-')[0];  // e.g., "en" from "en-CA-LiamNeural"
+
+    // ✅ Step 1: Build fallback text to avoid empty inputs
+    const rawText = article.content || article.description || article.full_content || article.title || '';
+
+    if (!rawText.trim()) {
+        alert("This article does not contain any usable text.");
+        return;
+    }
+
+    // ✅ Step 2: Fetch and cache voice-optimized summary if not already present
+    if (!article.voiceOptimizedContent || article.voiceOptimizedContent.trim().length < 30) {
+        try {
+            const res = await fetch('/api/news/voice-optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: rawText,
+                    title: article.title || ''
+                })
+            });
+
+            const result = await res.json();
+            article.voiceOptimizedContent = result.optimized_content?.trim() || rawText;
+        } catch (err) {
+            console.error("Voice optimization failed:", err);
+            alert("Could not optimize article for voice. Using fallback.");
+            article.voiceOptimizedContent = rawText;
+        }
+    }
+
+    let summaryText = article.voiceOptimizedContent;
+
+    if (!summaryText.trim()) {
+        alert("No summary available for this article.");
+        return;
+    }
+
+    // ✅ Step 3: Translate if necessary
+    if (langCode !== 'en') {
+        try {
+            const res = await fetch('/api/news/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: summaryText, target_language: langCode })
+            });
+
+            const result = await res.json();
+            if (result.translated_text?.trim()) {
+                summaryText = result.translated_text.trim();
+            } else {
+                console.warn("Translation returned empty. Using English.");
+            }
+        } catch (err) {
+            console.error("Translation error:", err);
+            alert("Error during translation.");
+        }
+    }
+
+    // ✅ Step 4: Send to TTS
+    try {
+        const ttsRes = await fetch('/api/news/summary-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: summaryText,
+                title: article.title || 'summary',
+                voice_id: selectedVoice,
+                speed: 1.0,
+                depth: 1
+            })
+        });
+
+        const result = await ttsRes.json();
+
+        if (result.audio_url) {
+            const audio = new Audio(result.audio_url);
+            audio.play();
+            activeAudio = audio;
+        } else {
+            console.error("TTS generation failed:", result.error);
+            alert("Failed to generate audio.");
+        }
+    } catch (err) {
+        console.error("TTS request error:", err);
+        alert("An error occurred while generating audio.");
+    }
+}
+
+
+
+// Function to stop audio playback
+function stopListening(buttonElement, originalText) {
+    if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        activeAudio = null;
+    }
+    if (buttonElement) {
+        buttonElement.textContent = originalText;
+        buttonElement.disabled = false;
+        // Restore the original listen function
+        const articleIndex = buttonElement.dataset.index;
+        buttonElement.onclick = () => listenToSummary(articleIndex);
+    }
+}
+
+
+
+
+// Expose for debugging if needed
 window.articles = articles;

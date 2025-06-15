@@ -137,12 +137,20 @@ def generate_voice_optimized_text(article_text, word_limit=300):
         str: Voice-optimized version of the article
     """
     import re
-    
-    # Clean up the text
-    text = re.sub(r'\s+', ' ', article_text)  # Remove extra whitespace
+    import nltk
+    from nltk.tokenize import sent_tokenize
+
+    # Ensure required NLTK data is available
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+
+    # Step 1: Clean up the raw article text
+    text = re.sub(r'\s+', ' ', article_text)  # Normalize whitespace
     text = re.sub(r'http\S+', '', text)  # Remove URLs
-    
-    # Replace abbreviations with full forms for better TTS
+
+    # Step 2: Replace common abbreviations with their full forms for clarity in TTS
     abbreviations = {
         'Dr.': 'Doctor',
         'Mr.': 'Mister',
@@ -159,37 +167,32 @@ def generate_voice_optimized_text(article_text, word_limit=300):
         'Inc.': 'Incorporated',
         'Ltd.': 'Limited',
     }
-    
-    for abbr, full_form in abbreviations.items():
-        text = text.replace(abbr, full_form)
-    
-    # Split into sentences
-    import nltk
-    from nltk.tokenize import sent_tokenize
-    
+    for abbr, full in abbreviations.items():
+        text = text.replace(abbr, full)
+
+    # Step 3: Split into sentences for simplification
     sentences = sent_tokenize(text)
-    
-    # Simplify complex sentences (very basic implementation)
+
     simplified_sentences = []
     for sentence in sentences:
-        # Break up long sentences with too many commas
+        # Break up overly long or complex sentences
         if sentence.count(',') > 3:
             parts = sentence.split(',')
             for i in range(0, len(parts), 2):
                 if i + 1 < len(parts):
-                    simplified_sentences.append(parts[i] + ',' + parts[i+1] + '.')
+                    simplified_sentences.append(parts[i].strip() + ', ' + parts[i + 1].strip() + '.')
                 else:
-                    simplified_sentences.append(parts[i] + '.')
+                    simplified_sentences.append(parts[i].strip() + '.')
         else:
-            simplified_sentences.append(sentence)
-    
-    # Combine sentences and limit to word_limit
+            simplified_sentences.append(sentence.strip())
+
+    # Step 4: Concatenate and limit total word count
     combined_text = ' '.join(simplified_sentences)
     words = combined_text.split()
-    
+
     if len(words) > word_limit:
         return ' '.join(words[:word_limit]) + '...'
-    
+
     return combined_text
 
 

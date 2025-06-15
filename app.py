@@ -439,31 +439,18 @@ def generate_article_summary():
 @app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():
     """Optimize article content for voice narration"""
-    # Get request data
     data = request.json
-    
+
     if not data or 'content' not in data:
         return jsonify({"error": "No content provided"}), 400
-    
+
     try:
-        # Generate voice-optimized content
         content = data.get('content', '')
-        title = data.get('title', '')
-        
-        # Define a placeholder function for voice optimization
-        def generate_voice_optimized_text(content, word_limit=400):
-            # Truncate content to the word limit as a simple optimization
-            words = content.split()
-            return ' '.join(words[:word_limit])
-        
         optimized_content = generate_voice_optimized_text(content, word_limit=400)
-        
+
         return jsonify({
-            "optimized_content": optimized_content,
-            "original_length": len(content),
-            "optimized_length": len(optimized_content)
+            "optimized_content": optimized_content
         })
-        
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -547,79 +534,36 @@ def stream_temp_audio(path):
 
 
 @app.route('/api/news/summary-audio', methods=['POST'])
-def generate_summary_audio():
-    """Generate audio from text content with proper error handling"""
+def summary_audio():
+    data = request.json
+    text = data.get("content", "")
+    voice_id = data.get("voice_id", "en-CA-LiamNeural")
+    speed = float(data.get("speed", 1.0))
+    depth = int(data.get("depth", 1))
+
+    if not text.strip():
+        return jsonify({"error": "No text provided"}), 400
+
     try:
-        data = request.json
-        content = data.get("content", "")
-        title = data.get("title", "summary")
-        voice_id = data.get("voice_id", "en-CA-LiamNeural")
-        speed = float(data.get("speed", 1.0))
-        depth = int(data.get("depth", 1))
+        # Write text to a temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w', encoding='utf-8') as temp:
+            temp.write(text)
+            script_path = temp.name
 
-        if not content:
-            return jsonify({"error": "No content provided"}), 400
+        # Output file path
+        output_filename = f"{int(time.time())}_{voice_id}.mp3"
+        output_audio = os.path.join("static/audio", output_filename)
 
-        # Generate unique timestamp for file naming
-        timestamp = int(time.time())
-        
-        # Save content to temp file
-        script_filename = f"summary_{timestamp}.txt"
-        script_file = os.path.join(app.config['UPLOAD_FOLDER'], script_filename)
-        
-        try:
-            with open(script_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-            app.logger.info(f"Content saved to: {script_file}")
-        except Exception as e:
-            app.logger.error(f"Error saving content to file: {e}")
-            return jsonify({"error": "Error saving content"}), 500
+        # Generate audio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(generate_simple_tts(script_path, output_audio, voice_id, speed, depth))
 
-        # Generate output path with consistent naming
-        output_filename = f"final_{timestamp}.mp3"  # This matches your error log
-        output_file = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-        
-        app.logger.info(f"Generating voice with {voice_id}, speed={speed}, depth={depth}")
-        app.logger.info(f"Output file will be: {output_file}")
-
-        try:
-            # Call your existing TTS generation
-            import asyncio
-            audio_path = asyncio.run(generate_simple_tts(
-                script_file, output_file, voice_id, speed, depth
-            ))
-            
-            # Verify the file was actually created
-            if not os.path.exists(audio_path):
-                app.logger.error(f"TTS generation failed - file not created: {audio_path}")
-                return jsonify({"error": "Audio generation failed"}), 500
-            
-            # Check if the file has content
-            file_size = os.path.getsize(audio_path)
-            if file_size == 0:
-                app.logger.error(f"TTS generation created empty file: {audio_path}")
-                return jsonify({"error": "Generated audio file is empty"}), 500
-            
-            app.logger.info(f"Audio generated successfully: {audio_path} (size: {file_size} bytes)")
-            
-            # Clean up the temporary script file
-            try:
-                os.remove(script_file)
-            except Exception as e:
-                app.logger.warning(f"Could not clean up temp file: {e}")
-
-            return jsonify({
-                "audio_url": url_for('stream_temp_audio', path=os.path.basename(audio_path)),
-                "file_size": file_size
-            })
-            
-        except Exception as e:
-            app.logger.error(f"Error in TTS generation: {e}")
-            return jsonify({"error": f"Audio generation failed: {str(e)}"}), 500
+        return jsonify({"audio_url": f"/static/audio/{output_filename}"})
 
     except Exception as e:
-        app.logger.error(f"Error in generate_summary_audio: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        app.logger.error(f"TTS error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # Optional: Add a cleanup function to remove old temp files

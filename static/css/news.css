@@ -353,3 +353,10 @@ h1.h3 {
     background-color: #333;
     color: #fff;
 }
+.article-listen-btn i {
+  font-size: 1.2em;
+  color: white;
+}
+.article-listen-btn:hover i {
+  opacity: 0.8;
+}
