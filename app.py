@@ -446,6 +446,14 @@ def optimize_article_for_voice():
 
     try:
         content = data.get('content', '')
+        
+        # Simple fallback implementation for voice optimization
+        def generate_voice_optimized_text(text, word_limit=400):
+            words = text.split()
+            if len(words) > word_limit:
+                return ' '.join(words[:word_limit])
+            return text
+
         optimized_content = generate_voice_optimized_text(content, word_limit=400)
 
         return jsonify({
