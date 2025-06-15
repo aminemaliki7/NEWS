@@ -362,3 +362,164 @@ h1.h3 {
 .article-listen-btn:hover i {
   opacity: 0.8;
 }
+/* ==========================================================================
+   AUDIO CONTROLS - PROGRESS BAR AND PLAY/PAUSE BUTTON ONLY
+   ========================================================================== */
+
+/* Audio Loading State with Progress Bar */
+.audio-loading {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.audio-loading .spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+}
+
+.audio-loading .progress {
+  height: 6px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.audio-loading .progress-bar {
+  background: linear-gradient(90deg, #007bff, #0056b3);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.audio-loading .progress-bar-animated {
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* Play/Pause Button States */
+.article-listen-btn {
+  position: relative;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+  min-width: 44px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Loading state for button */
+.article-listen-btn[data-state="loading"] {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.article-listen-btn[data-state="loading"]::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: btn-spinner 0.8s linear infinite;
+}
+
+/* Playing state for button */
+.article-listen-btn[data-state="playing"] {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+}
+
+.article-listen-btn[data-state="playing"]:hover {
+  background-color: #c82333 !important;
+  border-color: #bd2130 !important;
+}
+
+/* Default/Ready state */
+.article-listen-btn[data-state="ready"] {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.article-listen-btn[data-state="ready"]:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+}
+
+/* Button text transitions */
+.article-listen-btn .btn-text {
+  transition: opacity 0.2s ease;
+}
+
+.article-listen-btn[data-state="loading"] .btn-text {
+  opacity: 0;
+}
+
+/* Progress bar animations */
+@keyframes progress-bar-stripes {
+  0% {
+    background-position: 1rem 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes btn-spinner {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Accessibility improvements */
+.article-listen-btn:focus {
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.article-listen-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Small screen adjustments */
+@media (max-width: 576px) {
+  .audio-loading {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .audio-loading .progress {
+    height: 4px;
+  }
+  
+  .article-listen-btn {
+    min-width: 40px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .audio-loading .progress-bar-animated {
+    animation: none;
+  }
+  
+  .article-listen-btn::after {
+    animation: none;
+  }
+  
+  .article-listen-btn,
+  .audio-loading .progress-bar {
+    transition: none;
+  }
+}

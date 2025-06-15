@@ -4,15 +4,16 @@ let currentCategory = 'general';
 let currentLanguage = 'en';
 let currentQuery = '';
 
+// Global variable to keep track of the currently playing audio and its associated button
+let activeAudio = null;
+let currentPlayButton = null;
+
 // DOM elements
 const loadingIndicator = document.getElementById('loadingIndicator');
 const emptyState = document.getElementById('emptyState');
 const errorState = document.getElementById('errorState');
 const newsList = document.getElementById('newsList');
 const newsTemplate = document.getElementById('newsArticleTemplate');
-
-// Keep track of active audio elements for stopping
-let activeAudio = null;
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', function() {
@@ -116,7 +117,7 @@ function createArticleElement(article, index) {
     template.querySelector('.source-name').textContent = article.source?.name || 'Unknown Source';
     template.querySelector('.publish-date').textContent = formatDate(article.publishedAt);
     template.querySelector('.article-description').textContent = article.description || 'No description available.';
-    
+
     const imageEl = template.querySelector('.article-image');
     if (article.image && article.image.startsWith('http')) {
         imageEl.src = article.image;
@@ -132,17 +133,19 @@ function createArticleElement(article, index) {
         imageEl.alt = 'Image not available';
         imageEl.style.display = '';
     }
-    
+
     template.querySelector('.article-read-btn').href = article.url;
-    
+
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
-    listenBtn.onclick = () => listenToSummary(index);
-    
+    // Set initial icon to 'Play'
+    listenBtn.innerHTML = '▶︎ ';
+    listenBtn.onclick = () => listenToSummary(index); // Assign click handler
+
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
-    
+
     return template;
 }
 
@@ -168,25 +171,57 @@ async function listenToSummary(index) {
     const article = articles[index];
     const voiceSelect = document.getElementById(`voice-select-${index}`);
     const selectedVoice = voiceSelect?.value;
+    const listenBtn = document.querySelector(`.article-listen-btn[data-index="${index}"]`);
 
-    if (!article || !selectedVoice) {
-        console.warn("Missing article or voice.");
+    if (!article || !selectedVoice || !listenBtn) {
+        console.warn("Missing article, voice, or listen button.");
         return;
     }
 
-    const langCode = selectedVoice.split('-')[0];  // e.g., "en" from "en-CA-LiamNeural"
+    const card = listenBtn.closest('.card'); // Get the parent card for loading UI
+    const loadingUI = card.querySelector('.audio-loading');
 
-    // ✅ Step 1: Build fallback text to avoid empty inputs
+    // Scenario 1: User clicks the currently playing button (toggle play/pause)
+    if (activeAudio && currentPlayButton === listenBtn) {
+        if (activeAudio.paused) {
+            activeAudio.play();
+            listenBtn.innerHTML = '‖ '; // Change to pause icon
+        } else {
+            activeAudio.pause();
+            listenBtn.innerHTML = '▶︎ '; // Change to play icon
+        }
+        return; // Exit, as we've handled the toggle
+    }
+
+    // Scenario 2: User clicks a *different* button OR no audio is currently playing.
+    // Stop any existing audio and reset its button before playing new audio.
+    if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        if (currentPlayButton) {
+            currentPlayButton.innerHTML = '▶︎ '; // Reset the previously playing button
+        }
+        activeAudio = null; // Clear active audio
+        currentPlayButton = null; // Clear active button
+    }
+
+    // Show loading indicator for the new audio
+    loadingUI.classList.remove('d-none');
+    listenBtn.disabled = true; // Disable button during loading
+
+    const langCode = selectedVoice.split('-')[0];
     const rawText = article.content || article.description || article.full_content || article.title || '';
 
     if (!rawText.trim()) {
         alert("This article does not contain any usable text.");
+        loadingUI.classList.add('d-none');
+        listenBtn.disabled = false;
         return;
     }
 
-    // ✅ Step 2: Fetch and cache voice-optimized summary if not already present
-    if (!article.voiceOptimizedContent || article.voiceOptimizedContent.trim().length < 30) {
-        try {
+    try {
+        // Optimize content for voice if not already done or if too short
+        if (!article.voiceOptimizedContent || article.voiceOptimizedContent.trim().length < 30) {
             const res = await fetch('/api/news/voice-optimize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -195,46 +230,26 @@ async function listenToSummary(index) {
                     title: article.title || ''
                 })
             });
-
             const result = await res.json();
             article.voiceOptimizedContent = result.optimized_content?.trim() || rawText;
-        } catch (err) {
-            console.error("Voice optimization failed:", err);
-            alert("Could not optimize article for voice. Using fallback.");
-            article.voiceOptimizedContent = rawText;
         }
-    }
 
-    let summaryText = article.voiceOptimizedContent;
+        let summaryText = article.voiceOptimizedContent;
 
-    if (!summaryText.trim()) {
-        alert("No summary available for this article.");
-        return;
-    }
-
-    // ✅ Step 3: Translate if necessary
-    if (langCode !== 'en') {
-        try {
+        // Translate content if the selected language is not English
+        if (langCode !== 'en') {
             const res = await fetch('/api/news/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: summaryText, target_language: langCode })
             });
-
             const result = await res.json();
             if (result.translated_text?.trim()) {
                 summaryText = result.translated_text.trim();
-            } else {
-                console.warn("Translation returned empty. Using English.");
             }
-        } catch (err) {
-            console.error("Translation error:", err);
-            alert("Error during translation.");
         }
-    }
 
-    // ✅ Step 4: Send to TTS
-    try {
+        // Generate audio from the (optimized and translated) summary text
         const ttsRes = await fetch('/api/news/summary-audio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -250,39 +265,34 @@ async function listenToSummary(index) {
         const result = await ttsRes.json();
 
         if (result.audio_url) {
-            const audio = new Audio(result.audio_url);
-            audio.play();
-            activeAudio = audio;
+            // Create and play new audio
+            activeAudio = new Audio(result.audio_url);
+            currentPlayButton = listenBtn; // Set the current button as active
+
+            activeAudio.play();
+            listenBtn.innerHTML = '‖ '; // Change to pause icon
+            listenBtn.disabled = false; // Enable button now that audio is playing
+
+            // Event listener for when the audio finishes playing
+            activeAudio.onended = () => {
+                loadingUI.classList.add('d-none'); // Hide loading UI
+                listenBtn.innerHTML = '▶︎ '; // Reset button to play icon
+                activeAudio = null; // Clear active audio
+                currentPlayButton = null; // Clear active button
+            };
         } else {
-            console.error("TTS generation failed:", result.error);
             alert("Failed to generate audio.");
+            loadingUI.classList.add('d-none');
+            listenBtn.disabled = false;
         }
+
     } catch (err) {
-        console.error("TTS request error:", err);
-        alert("An error occurred while generating audio.");
+        console.error(err);
+        alert("An error occurred during voice generation.");
+        loadingUI.classList.add('d-none');
+        listenBtn.disabled = false;
     }
 }
-
-
-
-// Function to stop audio playback
-function stopListening(buttonElement, originalText) {
-    if (activeAudio) {
-        activeAudio.pause();
-        activeAudio.currentTime = 0;
-        activeAudio = null;
-    }
-    if (buttonElement) {
-        buttonElement.textContent = originalText;
-        buttonElement.disabled = false;
-        // Restore the original listen function
-        const articleIndex = buttonElement.dataset.index;
-        buttonElement.onclick = () => listenToSummary(articleIndex);
-    }
-}
-
-
-
 
 // Expose for debugging if needed
 window.articles = articles;
