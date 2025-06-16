@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 import threading
 from datetime import datetime
 from flask import send_file
-from news_summary import generate_voice_optimized_text
+from news_summary import generate_news_summary, generate_voice_optimized_text
 from youtube_news_generator import generate_youtube_news_script
 
 import google.generativeai as genai
@@ -408,34 +408,18 @@ def get_article_content():
 
 @app.route('/api/news/summary', methods=['POST'])
 def generate_article_summary():
-    """Generate a summary of a news article"""
-    # Get request data
     data = request.json
-    
     if not data or 'content' not in data:
         return jsonify({"error": "No content provided"}), 400
-    
-    try:
-        # Generate summary
-        content = data.get('content', '')
-        title = data.get('title', '')
-        
-        # Placeholder function for generating a news summary
-        def generate_news_summary(content, max_length=2000):
-            return content[:max_length]  # Truncate content to max_length as a simple summary
 
-        summary = generate_news_summary(content, max_length=2000)
-        
-        return jsonify({
-            "summary": summary,
-            "original_length": len(content),
-            "summary_length": len(summary)
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error generating summary: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+    content = data.get('content', '')
+    summary = generate_news_summary(content, max_words=100)
 
+    return jsonify({
+        "summary": summary,
+        "original_length": len(content),
+        "summary_length": len(summary)
+    })
 
 @app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():
@@ -617,6 +601,9 @@ def translate_text():
     except Exception as e:
         app.logger.error(f"Error translating text with Gemini: {e}")
         return jsonify({"error": f"Failed to translate text: {str(e)}"}), 500
+    
+
+    
 
 
 # Call cleanup periodically (you can set this up with a scheduler)
