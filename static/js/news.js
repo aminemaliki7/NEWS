@@ -1,9 +1,10 @@
 // Global variables
 let articles = [];
 let currentCategory = localStorage.getItem('lastCategory') || 'general';
-let currentLanguage = localStorage.getItem('lastLanguage') || 'en';
+// currentLanguage is primarily for the news fetching API, audio language is handled per article.
+let currentLanguage = 'en'; // Keep for news fetching API, but not for audio TTS language parameter.
 let currentQuery = '';
-let siteLanguage = localStorage.getItem('siteLanguage') || 'en';
+let siteLanguage = 'en'; // Force English for general interface texts
 let darkMode = localStorage.getItem('darkMode') === 'true';
 
 // Audio state
@@ -11,7 +12,6 @@ let activeAudio = null;
 let currentPlayButton = null;
 let currentArticleIndex = null;
 let audioCache = new Map(); // Cache for faster audio loading
-// Removed: isReadingAll, readAllQueue, readAllButton, resolveModalPromise
 
 // DOM elements
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -20,33 +20,35 @@ const errorState = document.getElementById('errorState');
 const newsList = document.getElementById('newsList');
 const newsTemplate = document.getElementById('newsArticleTemplate');
 
-// Language translations
+// Language translations - Only keep English for UI texts, but audio can be multi-language
 const translations = {
     en: {
         title: "📰 News Reader",
-        search: "Search news...",
-        searchBtn: "Search",
+        search: "Search keywords...",
+        searchBtn: "Apply Filters",
         categories: {
             general: "General",
+            world: "World",
+            nation: "Nation",
             business: "Business",
             technology: "Technology",
             sports: "Sports",
             health: "Health",
-            entertainment: "Entertainment"
+            entertainment: "Entertainment",
+            Fashion: "Fashion" // Added Fashion to translations
         },
-        // Removed: readAll, stopReading, readingProgress, of
         noNews: "No news found for",
         tryDifferent: "Try a different keyword or category.",
         unknownSource: "Unknown Source",
         unknownDate: "Unknown Date",
         yesterday: "Yesterday",
         daysAgo: "days ago",
-        readFull: "Read Full Article",
-        listen: "Listen", // Kept for potential aria-label or other UI element if needed
-        selectVoice: "Select Voice",
+        readFull: "Read article",
+        listen: "Listen", // This will be replaced by play/pause icons
+        selectVoice: "Select Voice", // Not explicitly used in this HTML version, but good to keep
         darkMode: "Dark Mode",
         lightMode: "Light Mode",
-        language: "Language",
+        language: "Language", // Not explicitly used in this HTML version, but good to keep
         noDescription: "No description available.",
         noText: "This article does not contain any usable text.",
         audioFailed: "Failed to generate audio.",
@@ -54,123 +56,18 @@ const translations = {
         audioLoadError: "Error loading audio. Please try again.",
         loading: "Loading...",
         error: "An error occurred. Please try again later."
-        // Removed: readNextArticlePrompt, continueReadingTitle, yes, no
-    },
-    fr: {
-        title: "📰 Lecteur d'Actualités",
-        search: "Rechercher des actualités...",
-        searchBtn: "Rechercher",
-        categories: {
-            general: "Général",
-            business: "Affaires",
-            technology: "Technologie",
-            sports: "Sports",
-            health: "Santé",
-            entertainment: "Divertissement"
-        },
-        // Removed: readAll, stopReading, readingProgress, of
-        noNews: "Aucune actualité trouvée pour",
-        tryDifferent: "Essayez un autre mot-clé ou catégorie.",
-        unknownSource: "Source Inconnue",
-        unknownDate: "Date Inconnue",
-        yesterday: "Hier",
-        daysAgo: "jours passés",
-        readFull: "Lire l'Article Complet",
-        listen: "Écouter",
-        selectVoice: "Sélectionner la Voix",
-        darkMode: "Mode Sombre",
-        lightMode: "Mode Clair",
-        language: "Langue",
-        noDescription: "Aucune description disponible.",
-        noText: "Cet article ne contient aucun texte utilisable.",
-        audioFailed: "Échec de génération audio.",
-        audioError: "Une erreur s'est produite lors de la génération vocale.",
-        audioLoadError: "Erreur de chargement audio. Veuillez réessayer.",
-        loading: "Chargement...",
-        error: "Une erreur s'est produite. Veuillez réessayer plus tard."
-        // Removed: readNextArticlePrompt, continueReadingTitle, yes, no
-    },
-    es: {
-        title: "📰 Lector de Noticias",
-        search: "Buscar noticias...",
-        searchBtn: "Buscar",
-        categories: {
-            general: "General",
-            business: "Negocios",
-            technology: "Tecnología",
-            sports: "Deportes",
-            health: "Salud",
-            entertainment: "Entretenimiento"
-        },
-        // Removed: readAll, stopReading, readingProgress, of
-        noNews: "No se encontraron noticias para",
-        tryDifferent: "Prueba con otra palabra clave o categoría.",
-        unknownSource: "Fuente Desconocida",
-        unknownDate: "Fecha Desconocida",
-        yesterday: "Ayer",
-        daysAgo: "días atrás",
-        readFull: "Leer Artículo Completo",
-        listen: "Escuchar",
-        selectVoice: "Seleccionar Voz",
-        darkMode: "Modo Oscuro",
-        lightMode: "Modo Claro",
-        language: "Idioma",
-        noDescription: "No hay descripción disponible.",
-        noText: "Este artículo no contiene texto utilizable.",
-        audioFailed: "Error al generar audio.",
-        audioError: "Ocurrió un error durante la generación de voz.",
-        audioLoadError: "Error cargando audio. Por favor intenta de nuevo.",
-        loading: "Cargando...",
-        error: "Ocurrió un error. Por favor intenta más tarde."
-        // Removed: readNextArticlePrompt, continueReadingTitle, yes, no
-    },
-    ar: {
-        title: "📰 قارئ الأخبار",
-        search: "البحث في الأخبار...",
-        searchBtn: "بحث",
-        categories: {
-            general: "عام",
-            business: "أعمال",
-            technology: "تكنولوجيا",
-            sports: "رياضة",
-            health: "صحة",
-            entertainment: "ترفيه"
-        },
-        // Removed: readAll, stopReading, readingProgress, of
-        noNews: "لم يتم العثور على أخبار لـ",
-        tryDifferent: "جرب كلمة مفتاحية أو فئة مختلفة.",
-        unknownSource: "مصدر غير معروف",
-        unknownDate: "تاريخ غير معروف",
-        yesterday: "أمس",
-        daysAgo: "أيام مضت",
-        readFull: "قراءة المقال كاملاً",
-        listen: "استمع",
-        selectVoice: "اختر الصوت",
-        darkMode: "الوضع المظلم",
-        lightMode: "الوضع المضيء",
-        language: "اللغة",
-        noDescription: "لا يوجد وصف متاح.",
-        noText: "هذا المقال لا يحتوي على نص قابل للاستخدام.",
-        audioFailed: "فشل في توليد الصوت.",
-        audioError: "حدث خطأ أثناء توليد الصوت.",
-        audioLoadError: "خطأ في تحميل الصوت. يرجى المحاولة مرة أخرى.",
-        loading: "جاري التحميل...",
-        error: "حدث خطأ. يرجى المحاولة مرة أخرى لاحقاً."
-        // Removed: readNextArticlePrompt, continueReadingTitle, yes, no
     }
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     // Apply saved preferences
-    document.getElementById('language').value = currentLanguage;
     document.getElementById('category').value = currentCategory;
 
     // Initialize theme and language
     initializeTheme();
-    initializeLanguage();
-    addThemeAndLanguageControls();
-
+    updateInterfaceLanguage(); // Call directly to set English texts
+    addThemeControl();
     updateCurrentDate();
     setupEventListeners();
     loadNews();
@@ -193,8 +90,6 @@ function setupEventListeners() {
     document.getElementById('searchBtn').addEventListener('click', () => {
         currentQuery = document.getElementById('searchQuery').value;
         currentCategory = document.getElementById('category').value;
-        currentLanguage = document.getElementById('language').value;
-        localStorage.setItem('lastLanguage', currentLanguage);
         stopActiveAudio();
         loadNews();
     });
@@ -220,11 +115,10 @@ function debounce(fn, delay) {
 function updateCurrentDate() {
     const now = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const locale = siteLanguage === 'ar' ? 'ar-EG' : siteLanguage === 'es' ? 'es-ES' : siteLanguage === 'fr' ? 'fr-FR' : 'en-US';
-    document.getElementById('currentDateDisplay').textContent = now.toLocaleDateString(locale, options);
+    document.getElementById('currentDateDisplay').textContent = now.toLocaleDateString('en-US', options); // Force en-US locale
 }
 
-// Theme and Language Functions
+// Theme Functions
 function initializeTheme() {
     if (darkMode) {
         document.body.classList.add('dark-mode');
@@ -235,48 +129,29 @@ function initializeTheme() {
     }
 }
 
-function initializeLanguage() {
-    updateInterfaceLanguage();
-    if (siteLanguage === 'ar') {
-        document.body.classList.add('rtl');
-        document.dir = 'rtl';
-    } else {
-        document.body.classList.remove('rtl');
-        document.dir = 'ltr';
-    }
-}
-
-function addThemeAndLanguageControls() {
-    // Add controls to the top navigation area
+// Simplified function to only add theme control
+function addThemeControl() {
     const header = document.querySelector('.container-fluid') || document.body;
     const controlsHTML = `
-        <div class="theme-language-controls d-flex align-items-center gap-3 mb-3">
+        <div class="theme-controls d-flex align-items-center gap-3 mb-3">
             <div class="theme-toggle">
                 <button id="themeToggle" class="btn btn-outline-secondary btn-sm">
                     <span class="theme-icon">${darkMode ? '☀️' : '🌙'}</span>
-                    <span class="theme-text">${translations[siteLanguage][darkMode ? 'lightMode' : 'darkMode']}</span>
+                    <span class="theme-text">${translations.en[darkMode ? 'lightMode' : 'darkMode']}</span>
                 </button>
-            </div>
-            <div class="language-selector">
-                <select id="siteLanguageSelect" class="form-select form-select-sm">
-                    <option value="en" ${siteLanguage === 'en' ? 'selected' : ''}>🇺🇸 English</option>
-                    <option value="fr" ${siteLanguage === 'fr' ? 'selected' : ''}>🇫🇷 Français</option>
-                    <option value="es" ${siteLanguage === 'es' ? 'selected' : ''}>🇪🇸 Español</option>
-                    <option value="ar" ${siteLanguage === 'ar' ? 'selected' : ''}>🇸🇦 العربية</option>
-                </select>
             </div>
         </div>
     `;
 
-    if (header.firstChild) {
-        header.insertAdjacentHTML('afterbegin', controlsHTML);
-    } else {
-        header.innerHTML = controlsHTML + header.innerHTML;
+    // Ensure the theme controls are added only once and in the right place
+    if (!document.getElementById('themeToggle')) { // Check if already added
+        if (header.firstChild) {
+            header.insertAdjacentHTML('afterbegin', controlsHTML);
+        } else {
+            header.innerHTML = controlsHTML + header.innerHTML;
+        }
+        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
     }
-
-    // Add event listeners
-    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-    document.getElementById('siteLanguageSelect').addEventListener('change', changeSiteLanguage);
 }
 
 function toggleTheme() {
@@ -288,28 +163,16 @@ function toggleTheme() {
     const themeIcon = themeButton.querySelector('.theme-icon');
     const themeText = themeButton.querySelector('.theme-text');
 
-    themeIcon.textContent = darkMode ? '☀️' : '🌙';
-    themeText.textContent = translations[siteLanguage][darkMode ? 'lightMode' : 'darkMode'];
+    if (themeIcon) themeIcon.textContent = darkMode ? '☀️' : '🌙';
+    if (themeText) themeText.textContent = translations.en[darkMode ? 'lightMode' : 'darkMode'];
 }
 
-function changeSiteLanguage(e) {
-    siteLanguage = e.target.value;
-    localStorage.setItem('siteLanguage', siteLanguage);
-    initializeLanguage();
-    updateCurrentDate();
-
-    // Update theme toggle text
-    const themeText = document.querySelector('.theme-text');
-    if (themeText) {
-        themeText.textContent = translations[siteLanguage][darkMode ? 'lightMode' : 'darkMode'];
-    }
-}
-
+// Simplified language update function, always using English for UI
 function updateInterfaceLanguage() {
-    const t = translations[siteLanguage];
+    const t = translations.en; // Always use English translations for UI
 
     // Update title
-    const titleElement = document.querySelector('h1, .title');
+    const titleElement = document.querySelector('.journal-title'); // Corrected selector for H1
     if (titleElement) titleElement.textContent = t.title;
 
     // Update search placeholder
@@ -328,10 +191,9 @@ function updateInterfaceLanguage() {
         }
     });
 
-    // Update language label
-    const languageLabel = document.querySelector('label[for="language"]');
-    if (languageLabel) languageLabel.textContent = t.language + ':';
+    // Language label and select are removed from HTML, so no need to hide/remove them here.
 }
+
 
 function showLoading() {
     loadingIndicator.classList.remove('d-none');
@@ -351,7 +213,7 @@ function showEmpty() {
     loadingIndicator.classList.add('d-none');
     errorState.classList.add('d-none');
     emptyState.classList.remove('d-none');
-    const t = translations[siteLanguage];
+    const t = translations.en; // Always use English translations
     emptyState.textContent = `😕 ${t.noNews} "${currentQuery || currentCategory}". ${t.tryDifferent}`;
 }
 
@@ -364,7 +226,7 @@ function hideStates() {
 async function loadNews() {
     showLoading();
     try {
-        const params = new URLSearchParams({ category: currentCategory, language: currentLanguage });
+        const params = new URLSearchParams({ category: currentCategory, language: currentLanguage }); // currentLanguage defaults to 'en' for news API
         if (currentQuery) params.append('query', currentQuery);
         const response = await fetch(`/api/news?${params}`);
         const data = await response.json();
@@ -381,9 +243,6 @@ async function loadNews() {
 
 function displayNews(articlesData) {
     newsList.innerHTML = '';
-    // Removed: "Read All Articles" button and its container logic
-    // Removed: readAllBtn and its event listener
-
     articlesData.forEach((article, index) => {
         const articleElement = createArticleElement(article, index);
         newsList.appendChild(articleElement);
@@ -392,7 +251,7 @@ function displayNews(articlesData) {
 
 function createArticleElement(article, index) {
     const template = newsTemplate.content.cloneNode(true);
-    const t = translations[siteLanguage];
+    const t = translations.en; // Always use English translations for UI text within the article card
 
     template.querySelector('.article-title').textContent = article.title || 'No Title';
     template.querySelector('.source-name').textContent = article.source?.name || t.unknownSource;
@@ -410,21 +269,20 @@ function createArticleElement(article, index) {
 
     const readBtn = template.querySelector('.article-read-btn');
     readBtn.href = article.url;
-    readBtn.textContent = t.readFull;
+    readBtn.title = t.readFull; // Using title for tooltip
 
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
-    // Only use the play emoji for the initial state
-    listenBtn.innerHTML = '▶︎';
+    listenBtn.innerHTML = '▶︎ '; // Ensure space for icon
+    listenBtn.title = translations.en.listen; // Set tooltip
     listenBtn.onclick = () => listenToSummary(index);
 
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
+    // Set default selected voice based on localStorage or a fallback
+    voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural'; // Default to an English voice
 
-    // Add voice select label
-    const voiceLabel = template.querySelector('.voice-label');
-    if (voiceLabel) voiceLabel.textContent = t.selectVoice + ':';
 
     const progress = template.querySelector('.audio-progress');
     progress.style.display = 'none';
@@ -438,12 +296,10 @@ function stopActiveAudio() {
         activeAudio.pause();
         activeAudio.currentTime = 0;
         if (currentPlayButton) {
-            // Reset to play emoji
-            currentPlayButton.innerHTML = '▶︎';
+            currentPlayButton.innerHTML = '▶︎ '; // Reset to play icon
             currentPlayButton.disabled = false;
         }
 
-        // Hide loading and progress for current article
         if (currentArticleIndex !== null) {
             const card = document.querySelector(`.article-listen-btn[data-index="${currentArticleIndex}"]`)?.closest('.card');
             if (card) {
@@ -458,40 +314,36 @@ function stopActiveAudio() {
         currentPlayButton = null;
         currentArticleIndex = null;
     }
-    // Removed: stopReadAll() call if isReadingAll
 }
 
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('voice-select')) {
         const articleIndex = parseInt(e.target.dataset.articleIndex);
         const newVoice = e.target.value;
-        localStorage.setItem('lastVoice', newVoice);
+        localStorage.setItem('lastVoice', newVoice); // Save the last selected voice
 
         console.log(`Voice changed for article ${articleIndex}: ${newVoice}`);
 
-        // Clear cache for this article when voice changes
+        // Invalidate cache for this article with the new voice
         const cacheKey = `${articleIndex}-${newVoice}`;
         audioCache.delete(cacheKey);
 
-        // Check if this is the currently active article (playing or paused)
+        // If the voice was changed for the currently playing/active article,
+        // stop it and try to regenerate/play with the new voice.
         if (currentArticleIndex === articleIndex) {
             console.log('Voice changed for active article, regenerating immediately...');
 
-            // Remember if it was playing
-            const wasPlaying = activeAudio && !activeAudio.paused;
+            const wasPlaying = activeAudio && !activeAudio.paused; // Check if it was playing
 
-            // Stop current audio
-            stopActiveAudio();
-
-            // Regenerate audio with new voice immediately
-            // No delay needed for better UX
+            stopActiveAudio(); // Stop current audio
+            // Start playing the new audio immediately if it was previously playing
             listenToSummary(articleIndex, wasPlaying);
         }
     }
 });
 
 function formatDate(dateString) {
-    const t = translations[siteLanguage];
+    const t = translations.en; // Always use English translations
     if (!dateString) return t.unknownDate;
 
     const date = new Date(dateString);
@@ -502,8 +354,7 @@ function formatDate(dateString) {
     if (diffDays === 1) return t.yesterday;
     if (diffDays < 7) return `${diffDays} ${t.daysAgo}`;
 
-    const locale = siteLanguage === 'ar' ? 'ar-EG' : siteLanguage === 'es' ? 'es-ES' : siteLanguage === 'fr' ? 'fr-FR' : 'en-US';
-    return date.toLocaleDateString(locale);
+    return date.toLocaleDateString('en-US'); // Force en-US locale
 }
 
 async function listenToSummary(index, autoPlay = true) {
@@ -631,23 +482,21 @@ async function listenToSummary(index, autoPlay = true) {
     }
 }
 
-// Function to play audio and handle end-of-audio logic
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     activeAudio = new Audio(audioUrl);
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
-    const t = translations[siteLanguage];
+    const t = translations.en; // Always use English translations for messages
 
-    // Setup audio events
     activeAudio.onloadeddata = () => {
         loadingUI.classList.add('d-none');
         listenBtn.disabled = false;
 
         if (autoPlay) {
             activeAudio.play();
-            listenBtn.innerHTML = '‖'; // Pause emoji
+            listenBtn.innerHTML = '‖'; // Pause icon
         } else {
-            listenBtn.innerHTML = '▶︎'; // Play emoji
+            listenBtn.innerHTML = '▶︎ '; // Play icon
         }
     };
 
@@ -660,37 +509,29 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
     activeAudio.onended = () => {
         resetAudioUI(listenBtn, loadingUI, progressBar);
 
-        // Normal single article mode - audio ends and stops
         activeAudio = null;
         currentPlayButton = null;
         currentArticleIndex = null;
     };
 
     activeAudio.onerror = () => {
+        console.error("Audio playback error:", activeAudio.error);
         alert(t.audioLoadError);
         resetAudioUI(listenBtn, loadingUI, progressBar);
     };
 }
 
-// Function to reset audio UI elements
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
     if (loadingUI) loadingUI.classList.add('d-none');
     if (progressBar) progressBar.style.display = 'none';
     if (listenBtn) {
         listenBtn.disabled = false;
-        // Reset to play emoji
-        listenBtn.innerHTML = '▶︎';
+        listenBtn.innerHTML = '▶︎ '; // Reset to play icon
     }
 }
 
-// Removed: showCustomConfirm function (as it's tied to Read All auto-advance)
-// Removed: All Read All Articles Functions (toggleReadAll, startReadAll, stopReadAll, etc.)
-
+// Function to highlight the currently playing article (optional, but good for UX)
 function highlightCurrentArticle(index) {
-    // This function was primarily for "Read All" highlighting.
-    // Keeping it as a generic utility, but it won't be called automatically now.
-    // If you plan to introduce other highlighting features, keep it.
-    // If not, it can also be removed. For now, it's harmless.
     document.querySelectorAll('.card').forEach(card => {
         card.classList.remove('border-primary', 'shadow-lg');
         card.style.transform = '';

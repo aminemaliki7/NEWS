@@ -21,16 +21,8 @@
 
     <main class="journal-main-content container-fluid">
 
-      <!-- Mobile Toggle Button -->
-      <nav class="category-nav mb-3">
-        <div class="d-md-none text-center mb-2">
-          <button class="btn btn-dark w-100" type="button" data-bs-toggle="collapse" data-bs-target="#categoryMenu" aria-expanded="false" aria-controls="categoryMenu">
-            Categories ▾
-          </button>
-        </div>
-
-        <!-- Collapsible Menu -->
-        <div class="collapse d-md-block" id="categoryMenu">
+      <nav class="category-nav mb-3 d-none d-md-block">
+        <div id="categoryMenu">
           <ul class="list-unstyled d-flex justify-content-center flex-wrap flex-md-row flex-column align-items-center gap-2">
             <li><a href="#" class="category-link active" data-category="general">General</a></li>
             <li><a href="#" class="category-link" data-category="world">World</a></li>
@@ -41,7 +33,6 @@
             <li><a href="#" class="category-link" data-category="sports">Sports</a></li>
             <li><a href="#" class="category-link" data-category="science">Science</a></li>
             <li><a href="#" class="category-link" data-category="health">Health</a></li>
-            <li><a href="#" class="category-link" data-category="Fashion">Fashion</a></li>
           </ul>
         </div>
 
@@ -50,11 +41,11 @@
 
       <section class="filter-toolbar mb-4">
         <div class="row g-2 align-items-end">
-          <div class="col-md-4">
+          <div class="col-md-5">
             <label for="searchQuery" class="form-label visually-hidden">Search</label>
             <input id="searchQuery" type="text" class="form-control" placeholder="Search keywords..." />
           </div>
-          <div class="col-md-3">
+          <div class="col-md-5">
             <label for="category" class="form-label visually-hidden">Category</label>
             <select id="category" class="form-select">
               <option value="general">General</option>
@@ -66,14 +57,6 @@
               <option value="sports">Sports</option>
               <option value="science">Science</option>
               <option value="health">Health</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label for="language" class="form-label visually-hidden">Language</label>
-            <select id="language" class="form-select">
-              <option value="en">English</option>
-              <option value="ar">Arabic</option>
-              <option value="fr">French</option>
             </select>
           </div>
           <div class="col-md-2">
@@ -106,39 +89,31 @@
 
     </main>
 
-    <!-- News Article Template -->
     <template id="newsArticleTemplate">
       <article class="news-article col-md-6 col-lg-4 mb-3 d-flex">
         <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
 
-          <!-- Spinner + visual loading bar -->
           <div class="audio-loading text-muted small d-none text-center" style="width: 100%;">
             <div class="progress mt-2" style="height: 4px;">
               <div class="progress-bar progress-bar-striped progress-bar-animated bg-dark" style="width: 100%;"></div>
             </div>
           </div>
 
-          <!-- Title -->
           <h5 class="article-title mb-1" style="min-height: 2.8em; font-size: 1rem; font-weight: 600; line-height: 1.3;"></h5>
 
-          <!-- Source + Date -->
           <p class="article-source small text-muted mb-1">
             <span class="source-name"></span> • <span class="publish-date"></span>
           </p>
 
-          <!-- Image -->
           <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 120px; object-fit: cover; width: 100%;" />
 
-          <!-- Description -->
           <p class="article-description flex-grow-1 mb-2" style="font-size: 0.9em; min-height: 5em; line-height: 1.4;"></p>
 
-          <!-- Listen label -->
           <p class="text-muted small mb-1">🎧 Listen in your preferred language</p>
 
-          <!-- Voice selection + Buttons -->
           <div class="article-actions d-flex flex-column align-items-center gap-2 mt-auto pt-2">
 
-            <select class="form-select form-select-sm voice-select text-center" style="width: auto; min-width: 130px; font-size: 0.85em;">
+             <select class="form-select form-select-sm voice-select text-center" style="width: auto; min-width: 130px; font-size: 0.85em;">
               <option value="en-CA-LiamNeural">🇬🇧 English</option>
               <option value="ar-MA-JamalNeural">🇲🇦 Arabic</option>
               <option value="fr-FR-HenriNeural">🇫🇷 French</option>
@@ -152,7 +127,6 @@
               <button class="btn btn-sm btn-dark article-listen-btn px-3" data-index="" title="Play voice summary">▶︎ </button>
             </div>
 
-            <!-- Progress bar -->
             <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
 
           </div>
