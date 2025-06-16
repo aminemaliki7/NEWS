@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 import threading
 from datetime import datetime
 from flask import send_file
+from news_summary import generate_voice_optimized_text
 from youtube_news_generator import generate_youtube_news_script
 
 import google.generativeai as genai
@@ -438,7 +439,6 @@ def generate_article_summary():
 
 @app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():
-    """Optimize article content for voice narration"""
     data = request.json
 
     if not data or 'content' not in data:
@@ -446,15 +446,7 @@ def optimize_article_for_voice():
 
     try:
         content = data.get('content', '')
-        
-        # Simple fallback implementation for voice optimization
-        def generate_voice_optimized_text(text, word_limit=400):
-            words = text.split()
-            if len(words) > word_limit:
-                return ' '.join(words[:word_limit])
-            return text
-
-        optimized_content = generate_voice_optimized_text(content, word_limit=400)
+        optimized_content = generate_voice_optimized_text(content, word_limit=40000)
 
         return jsonify({
             "optimized_content": optimized_content
@@ -462,8 +454,6 @@ def optimize_article_for_voice():
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
 @app.route('/api/news/youtube-script', methods=['POST'])
 def generate_news_youtube_script_route():
     """Generate a YouTube-style news script based on article content"""

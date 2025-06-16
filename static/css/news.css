@@ -1,105 +1,257 @@
-/* General Body and Container Styling */
+/* Define CSS Variables for colors */
+:root {
+    /* Light Mode Colors (no changes needed here based on your feedback) */
+    --body-bg: #fefefe;
+    --text-color: #333;
+    --navbar-bg: #222;
+    --navbar-brand-color: #fff;
+    --navbar-link-color: rgba(255, 255, 255, 0.8);
+    --navbar-link-hover-color: #fff;
+    --heading-color: #333;
+    --border-color: #ccc;
+    --badge-bg: #666;
+    --category-link-border: #666;
+    --category-link-color: #666;
+    --category-link-hover-bg: #333;
+    --category-link-hover-color: #fff;
+    --card-border: #ccc;
+    --card-hover-border: #999;
+    --card-bg: #fff;
+    --card-title-color: #333;
+    --article-description-color: #555;
+    --source-date-color: #888;
+    --btn-outline-dark-color: #333;
+    --btn-outline-dark-border: #333;
+    --btn-outline-dark-hover-bg: #333;
+    --btn-outline-dark-hover-color: #fff;
+    --btn-link-color: #555;
+    --btn-link-hover-color: #000;
+    --form-border-color: #ccc;
+    --form-focus-border-color: #888;
+    --form-focus-shadow: rgba(0, 0, 0, 0.1);
+    --search-btn-bg: #333;
+    --search-btn-hover-bg: #000;
+    --loading-error-bg: #eee;
+    --loading-error-color: #495057;
+    --error-bg: #ffe0e0;
+    --error-color: #b30000;
+    --error-border: #ffb3b3;
+    --modal-border: #333;
+    --modal-header-bg: #f5f5f5;
+    --modal-title-color: #333;
+    --modal-title-small-color: #666;
+    --modal-body-bg: #fff;
+    --nav-tab-link-color: #666;
+    --nav-tab-link-border: #ddd;
+    --nav-tab-link-bg: #f8f8f8;
+    --nav-tab-link-active-color: #000;
+    --nav-tab-link-active-bg: #fff;
+    --tab-content-border: #ccc;
+    --editable-area-border: #ccc;
+    --editable-area-bg: #fdfdfd;
+    --editable-area-focus-border: #888;
+    --editable-area-focus-shadow: rgba(0, 0, 0, 0.1);
+    --placeholder-color: #aaa;
+    --audio-loading-bg: rgba(0, 0, 0, 0.05);
+    --audio-loading-border: rgba(0, 0, 0, 0.1);
+    --audio-progress-bar-bg: #e9ecef;
+    --audio-progress-value-bg: #007bff;
+    --btn-dark-bg: #333;
+    --btn-dark-hover-bg: #000;
+    --btn-secondary-bg: #666;
+    --btn-secondary-hover-bg: #555;
+    --btn-outline-primary-color: #333;
+    --btn-outline-primary-hover-bg: #333;
+    --article-listen-btn-bg: #007bff;
+    --article-listen-btn-hover-bg: #0056b3;
+    --article-listen-btn-playing-bg: #dc3545;
+    --article-listen-btn-playing-hover-bg: #c82333;
+    --article-listen-btn-loading-bg: #6c757d;
+}
+
+/* Dark Mode Colors - REAL DARK THEME */
+body.dark-mode {
+    --body-bg: #0A0A0A; /* Very deep dark grey, close to black */
+    --text-color: #E6E6E6; /* Off-white for general text, high contrast */
+    --navbar-bg: #1A1A1A; /* Slightly lighter than body for subtle layering */
+    --navbar-brand-color: #FFFFFF; /* Pure white for brand */
+    --navbar-link-color: rgba(255, 255, 255, 0.9); /* Bright links */
+    --navbar-link-hover-color: #FFFFFF;
+
+    --heading-color: #FAFAFA; /* Very light for main headings */
+    --border-color: #333333; /* Darker, subtle borders */
+    --badge-bg: #222222; /* Darker badge */
+
+    --category-link-border: #444444;
+    --category-link-color: #C0C0C0; /* Lighter category link text */
+    --category-link-hover-bg: #0084FF; /* Brighter, vibrant blue for emphasis */
+    --category-link-hover-color: #FFFFFF;
+
+    --card-border: #222222; /* Very dark card border */
+    --card-hover-border: #555555; /* Slightly more noticeable on hover */
+    --card-bg: #1A1A1A; /* Very dark card background */
+    --card-title-color: #FAFAFA; /* Very light for news card titles */
+    --article-description-color: #CFCFCF; /* Light grey for descriptions */
+    --source-date-color: #AAAAAA; /* Still visible but subdued */
+
+    --btn-outline-dark-color: #A0A0A0; /* Lighter grey for outline buttons */
+    --btn-outline-dark-border: #A0A0A0;
+    --btn-outline-dark-hover-bg: #A0A0A0;
+    --btn-outline-dark-hover-color: #1A1A1A;
+    --btn-link-color: #66CCFF; /* A vibrant, clear blue for links */
+    --btn-link-hover-color: #33BBFF;
+
+    --form-border-color: #444444;
+    --form-focus-border-color: #888888;
+    --form-focus-shadow: rgba(255, 255, 255, 0.2);
+    --search-btn-bg: #0084FF; /* Matches category hover blue */
+    --search-btn-hover-bg: #0066CC;
+
+    --loading-error-bg: #1A1A1A;
+    --loading-error-color: #E6E6E6;
+    --error-bg: #4D0000;
+    --error-color: #FFB3B3;
+    --error-border: #800000;
+
+    --modal-border: #444444;
+    --modal-header-bg: #222222;
+    --modal-title-color: #FAFAFA;
+    --modal-title-small-color: #C0C0C0;
+    --modal-body-bg: #1A1A1A;
+
+    --nav-tab-link-color: #C0C0C0;
+    --nav-tab-link-border: #444444;
+    --nav-tab-link-bg: #222222;
+    --nav-tab-link-active-color: #FFFFFF;
+    --nav-tab-link-active-bg: #0A0A0A; /* Active tab background matches body */
+    --tab-content-border: #333333;
+
+    --editable-area-border: #444444;
+    --editable-area-bg: #121212; /* Slightly darker than body for content area */
+    --editable-area-focus-border: #888888;
+    --editable-area-focus-shadow: rgba(255, 255, 255, 0.2);
+    --placeholder-color: #888888;
+
+    --audio-loading-bg: rgba(255, 255, 255, 0.1);
+    --audio-loading-border: rgba(255, 255, 255, 0.2);
+    --audio-progress-bar-bg: #333333;
+    --audio-progress-value-bg: #0084FF;
+
+    --btn-dark-bg: #0084FF; /* Primary blue for main action buttons */
+    --btn-dark-hover-bg: #0066CC;
+    --btn-secondary-bg: #444444;
+    --btn-secondary-hover-bg: #666666;
+    --btn-outline-primary-color: #66CCFF;
+    --btn-outline-primary-hover-bg: #66CCFF;
+
+    --article-listen-btn-bg: #28a745; /* Success green */
+    --article-listen-btn-hover-bg: #218838;
+    --article-listen-btn-playing-bg: #DC3545; /* Danger red */
+    --article-listen-btn-playing-hover-bg: #C82333;
+    --article-listen-btn-loading-bg: #6c757d;
+}
+
+/* Original CSS (no functional changes, just variable application) */
 body {
     font-family: 'Times New Roman', Times, serif; /* Journal-like font */
-    background-color: #fefefe; /* Near white background */
-    color: #333; /* Dark gray text */
+    background-color: var(--body-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
-    max-width: 1000px; /* Slightly narrower for a more refined look */
+    max-width: 1000px;
 }
 
-/* Navbar Styling */
 .navbar {
-    background-color: #222 !important; /* Darker navbar */
-    border-bottom: 1px solid #000;
+    background-color: var(--navbar-bg) !important;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .navbar-brand {
-    font-family: 'Georgia', serif; /* Classic font for brand */
+    font-family: 'Georgia', serif;
     font-weight: 700;
-    color: #fff !important;
+    color: var(--navbar-brand-color) !important;
+    transition: color 0.3s ease;
 }
 
 .navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--navbar-link-color);
     transition: color 0.3s ease;
 }
 
 .navbar-nav .nav-link:hover {
-    color: #fff;
+    color: var(--navbar-link-hover-color);
 }
 
 .navbar-nav .nav-link.active {
-    color: #fff;
+    color: var(--navbar-link-hover-color);
     font-weight: 600;
 }
 
-/* Header and Badge */
 h1.h3 {
     font-family: 'Georgia', serif;
-    color: #333;
+    color: var(--heading-color);
     font-weight: 700;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--border-color);
     padding-bottom: 10px;
     margin-bottom: 20px;
+    transition: color 0.3s ease, border-color 0.3s ease;
 }
 
-.badge.bg-secondary { /* Changed from bg-primary */
-    background-color: #666 !important; /* Darker grey for badge */
+.badge.bg-secondary {
+    background-color: var(--badge-bg) !important;
     font-size: 0.8em;
     padding: 0.4em 0.7em;
-    border-radius: 0; /* Sharp corners */
+    border-radius: 0;
     font-weight: normal;
+    transition: background-color 0.3s ease;
 }
 
-/* Category Navigation */
 .category-nav .category-link {
-    border-radius: 0; /* Sharp corners */
+    border-radius: 0;
     padding: 0.3rem 1rem;
     transition: all 0.3s ease;
     white-space: nowrap;
     font-family: 'Times New Roman', Times, serif;
-    border: 1px solid #666; /* Darker outline */
-    color: #666;
+    border: 1px solid var(--category-link-border);
+    color: var(--category-link-color);
     background-color: transparent;
 }
 
 .category-nav .category-link:hover {
-    background-color: #333;
-    color: #fff;
-    border-color: #333;
+    background-color: var(--category-link-hover-bg);
+    color: var(--category-link-hover-color);
+    border-color: var(--category-link-hover-bg);
 }
 
 .category-nav .category-link.active {
-    background-color: #333;
-    color: #fff;
-    border-color: #333;
+    background-color: var(--category-link-hover-bg);
+    color: var(--category-link-hover-color);
+    border-color: var(--category-link-hover-bg);
     font-weight: 500;
-    box-shadow: none; /* Remove shadow */
+    box-shadow: none;
 }
 
-/* Card Styling (General) */
 .card {
-    border: 1px solid #ccc; /* Subtle border */
-    border-radius: 0; /* Sharp corners for journal look */
+    border: 1px solid var(--card-border);
+    border-radius: 0;
     overflow: hidden;
-    background-color: #fff;
-    transition: none; /* Remove transform/shadow transition for a more static look */
+    background-color: var(--card-bg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .card:hover {
-    transform: none; /* No hover animation */
-    box-shadow: none; /* No hover shadow */
-    border-color: #999; /* Slightly darker border on hover */
+    transform: none;
+    box-shadow: none;
+    border-color: var(--card-hover-border);
 }
 
-/* News Article Card Specifics */
 .news-card .card-img-top {
     height: 180px;
     object-fit: cover;
-    border-radius: 0; /* No rounded corners */
-    /* Images retain color */
-    filter: none; /* Ensure no grayscale filter is applied */
+    border-radius: 0;
+    filter: none;
 }
 
 .news-card .card-body {
@@ -111,7 +263,7 @@ h1.h3 {
     font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
-    color: #333;
+    color: var(--card-title-color);
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -119,12 +271,13 @@ h1.h3 {
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.3s ease;
 }
 
 .news-card .card-text.article-description {
     font-family: 'Times New Roman', Times, serif;
     font-size: 0.95em;
-    color: #555;
+    color: var(--article-description-color);
     line-height: 1.6;
     margin-bottom: 1rem;
     display: -webkit-box;
@@ -133,177 +286,190 @@ h1.h3 {
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.3s ease;
 }
 
 .news-card .source-name,
 .news-card .publish-date {
     font-size: 0.8em;
-    color: #888;
+    color: var(--source-date-color);
     font-style: italic;
+    transition: color 0.3s ease;
 }
 
 .news-card .btn {
     font-size: 0.8em;
     padding: 0.4rem 0.8rem;
-    border-radius: 0; /* Sharp corners */
+    border-radius: 0;
     transition: all 0.2s ease;
     font-family: 'Times New Roman', Times, serif;
     text-transform: uppercase;
 }
 
-.news-card .btn-outline-dark { /* Changed from btn-outline-primary */
-    color: #333;
-    border-color: #333;
+.news-card .btn-outline-dark {
+    color: var(--btn-outline-dark-color);
+    border-color: var(--btn-outline-dark-border);
     background-color: transparent;
+    transition: all 0.3s ease;
 }
 
 .news-card .btn-outline-dark:hover {
-    background-color: #333;
-    color: #fff;
-    border-color: #333;
+    background-color: var(--btn-outline-dark-hover-bg);
+    color: var(--btn-outline-dark-hover-color);
+    border-color: var(--btn-outline-dark-hover-bg);
 }
 
 .news-card .btn-link {
-    color: #555;
+    color: var(--btn-link-color);
     text-decoration: underline;
+    transition: color 0.3s ease;
 }
 
 .news-card .btn-link:hover {
-    color: #000;
+    color: var(--btn-link-hover-color);
     text-decoration: none;
 }
 
-/* Form controls in filters */
 .form-select, .form-control {
     border-radius: 0;
-    border-color: #ccc;
+    border-color: var(--form-border-color);
     font-family: 'Times New Roman', Times, serif;
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
 }
 
 .form-select:focus, .form-control:focus {
-    border-color: #888;
-    box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.1);
+    border-color: var(--form-focus-border-color);
+    box-shadow: 0 0 0 0.25rem var(--form-focus-shadow);
 }
 
-.input-group .btn-dark { /* Search button */
-    background-color: #333;
-    border-color: #333;
+.input-group .btn-dark {
+    background-color: var(--search-btn-bg);
+    border-color: var(--search-btn-bg);
     color: #fff;
     border-radius: 0;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .input-group .btn-dark:hover {
-    background-color: #000;
-    border-color: #000;
+    background-color: var(--search-btn-hover-bg);
+    border-color: var(--search-btn-hover-bg);
 }
 
-
-/* Loading, Error, Empty States */
 #loadingIndicator, #emptyState, #errorState {
-    background-color: #eee; /* Lighter gray background */
+    background-color: var(--loading-error-bg);
     border-radius: 0;
     padding: 2rem;
     margin-top: 2rem;
-    color: #495057;
-    border: 1px solid #ccc;
+    color: var(--loading-error-color);
+    border: 1px solid var(--border-color);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 #errorState {
-    background-color: #ffe0e0; /* Subtle red for error */
-    color: #b30000;
-    border-color: #ffb3b3;
+    background-color: var(--error-bg);
+    color: var(--error-color);
+    border-color: var(--error-border);
 }
 
-/* Modal Styling */
 .modal-content {
     border-radius: 0;
     overflow: hidden;
-    border: 2px solid #333; /* Stronger border for modal */
+    border: 2px solid var(--modal-border);
+    transition: border-color 0.3s ease;
 }
 
 .modal-header {
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--border-color);
     padding: 1.5rem;
-    background-color: #f5f5f5; /* Light gray header */
+    background-color: var(--modal-header-bg);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .modal-title {
     font-family: 'Georgia', serif;
     font-weight: 700;
-    color: #333;
+    color: var(--modal-title-color);
+    transition: color 0.3s ease;
 }
 
 .modal-title small {
     display: block;
     font-size: 0.7em;
-    color: #666;
+    color: var(--modal-title-small-color);
     margin-top: 0.2rem;
     font-family: 'Times New Roman', Times, serif;
     font-style: italic;
+    transition: color 0.3s ease;
 }
 
 .modal-body {
     padding: 1.5rem;
-    background-color: #fff;
+    background-color: var(--modal-body-bg);
+    transition: background-color 0.3s ease;
 }
 
 .nav-tabs .nav-link {
     font-weight: 500;
-    color: #666;
+    color: var(--nav-tab-link-color);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
     transition: all 0.2s ease;
-    border: 1px solid #ddd;
+    border: 1px solid var(--nav-tab-link-border);
     border-bottom-color: transparent;
-    background-color: #f8f8f8;
+    background-color: var(--nav-tab-link-bg);
     font-family: 'Times New Roman', Times, serif;
 }
 
 .nav-tabs .nav-link.active {
-    color: #000;
-    background-color: #fff;
-    border-color: #ccc #ccc #fff;
+    color: var(--nav-tab-link-active-color);
+    background-color: var(--nav-tab-link-active-bg);
+    border-color: var(--border-color) var(--border-color) var(--nav-tab-link-active-bg);
     font-weight: 700;
 }
 
 .tab-content {
     border-radius: 0;
     min-height: 250px;
-    background-color: #fff;
-    border: 1px solid #ccc; /* Border around tab content */
+    background-color: var(--modal-body-bg);
+    border: 1px solid var(--tab-content-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .editable-content-area {
     min-height: 200px;
     padding: 1rem;
-    border: 1px dashed #ccc; /* Dashed border for content area */
+    border: 1px dashed var(--editable-area-border);
     border-radius: 0;
-    background-color: #fdfdfd;
+    background-color: var(--editable-area-bg);
     font-size: 1em;
     line-height: 1.7;
     overflow-y: auto;
     max-height: 400px;
     font-family: 'Times New Roman', Times, serif;
+    color: var(--text-color);
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .editable-content-area:focus {
     outline: none;
-    border-color: #888;
-    box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.1);
+    border-color: var(--editable-area-focus-border);
+    box-shadow: 0 0 0 0.25rem var(--editable-area-focus-shadow);
 }
 
 .editable-content-area p {
     margin-bottom: 1em;
-    text-align: justify; /* Justify text for journal look */
+    text-align: justify;
 }
 
 .editable-content-area .content-placeholder {
-    color: #aaa;
+    color: var(--placeholder-color);
     font-style: italic;
     text-align: center;
     padding-top: 50px;
+    transition: color 0.3s ease;
 }
 
-/* Audio Player Container */
 #audioPlayerContainer audio {
     width: 100%;
     margin-top: 1rem;
@@ -316,210 +482,243 @@ h1.h3 {
     border-radius: 0;
 }
 
-/* Buttons in Modal */
 .card-header strong {
     font-family: 'Georgia', serif;
 }
 
-.btn-dark { /* For Generate Read Aloud Audio */
-    background-color: #333;
-    border-color: #333;
+.btn-dark {
+    background-color: var(--btn-dark-bg);
+    border-color: var(--btn-dark-bg);
     color: #fff;
     border-radius: 0;
     font-family: 'Times New Roman', Times, serif;
     text-transform: uppercase;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .btn-dark:hover {
-    background-color: #000;
-    border-color: #000;
+    background-color: var(--btn-dark-hover-bg);
+    border-color: var(--btn-dark-hover-bg);
 }
 
 .btn-secondary {
-    background-color: #666;
-    border-color: #666;
+    background-color: var(--btn-secondary-bg);
+    border-color: var(--btn-secondary-bg);
     color: #fff;
     border-radius: 0;
     font-family: 'Times New Roman', Times, serif;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .btn-secondary:hover {
-    background-color: #555;
-    border-color: #555;
+    background-color: var(--btn-secondary-hover-bg);
+    border-color: var(--btn-secondary-hover-bg);
 }
 
-.btn-outline-primary { /* Download button for audio */
-    color: #333;
-    border-color: #333;
+.btn-outline-primary {
+    color: var(--btn-outline-primary-color);
+    border-color: var(--btn-outline-primary-color);
     border-radius: 0;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 .btn-outline-primary:hover {
-    background-color: #333;
+    background-color: var(--btn-outline-primary-hover-bg);
     color: #fff;
 }
 .article-listen-btn i {
-  font-size: 1.2em;
-  color: white;
+    font-size: 1.2em;
+    color: white;
 }
 .article-listen-btn:hover i {
-  opacity: 0.8;
+    opacity: 0.8;
 }
+
 /* ==========================================================================
-   AUDIO CONTROLS - PROGRESS BAR AND PLAY/PAUSE BUTTON ONLY
-   ========================================================================== */
+    AUDIO CONTROLS - PROGRESS BAR AND PLAY/PAUSE BUTTON ONLY
+    ========================================================================== */
 
 /* Audio Loading State with Progress Bar */
 .audio-loading {
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--audio-loading-bg);
+    border-radius: 8px;
+    border: 1px solid var(--audio-loading-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .audio-loading .spinner-border-sm {
-  width: 1rem;
-  height: 1rem;
-  border-width: 2px;
+    width: 1rem;
+    height: 1rem;
+    border-width: 2px;
 }
 
 .audio-loading .progress {
-  height: 6px;
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 0.5rem;
+    height: 6px;
+    background-color: var(--audio-progress-bar-bg);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+    transition: background-color 0.3s ease;
 }
 
 .audio-loading .progress-bar {
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  transition: width 0.3s ease;
-  border-radius: 3px;
+    background: var(--audio-progress-value-bg);
+    transition: width 0.3s ease;
+    border-radius: 3px;
 }
 
 .audio-loading .progress-bar-animated {
-  animation: progress-bar-stripes 1s linear infinite;
+    animation: progress-bar-stripes 1s linear infinite;
 }
 
 /* Play/Pause Button States */
 .article-listen-btn {
-  position: relative;
-  transition: all 0.2s ease;
-  font-size: 1rem;
-  min-width: 44px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    position: relative;
+    transition: all 0.2s ease;
+    font-size: 1rem;
+    min-width: 44px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Loading state for button */
 .article-listen-btn[data-state="loading"] {
-  background-color: #6c757d !important;
-  border-color: #6c757d !important;
-  cursor: not-allowed;
-  opacity: 0.8;
+    background-color: var(--article-listen-btn-loading-bg) !important;
+    border-color: var(--article-listen-btn-loading-bg) !important;
+    cursor: not-allowed;
+    opacity: 0.8;
 }
 
 .article-listen-btn[data-state="loading"]::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: btn-spinner 0.8s linear infinite;
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: btn-spinner 0.8s linear infinite;
 }
 
 /* Playing state for button */
 .article-listen-btn[data-state="playing"] {
-  background-color: #dc3545 !important;
-  border-color: #dc3545 !important;
+    background-color: var(--article-listen-btn-playing-bg) !important;
+    border-color: var(--article-listen-btn-playing-bg) !important;
 }
 
 .article-listen-btn[data-state="playing"]:hover {
-  background-color: #c82333 !important;
-  border-color: #bd2130 !important;
+    background-color: var(--article-listen-btn-playing-hover-bg) !important;
+    border-color: var(--article-listen-btn-playing-hover-bg) !important;
 }
 
 /* Default/Ready state */
 .article-listen-btn[data-state="ready"] {
-  background-color: #007bff;
-  border-color: #007bff;
+    background-color: var(--article-listen-btn-bg);
+    border-color: var(--article-listen-btn-bg);
 }
 
 .article-listen-btn[data-state="ready"]:hover {
-  background-color: #0056b3;
-  border-color: #004085;
+    background-color: var(--article-listen-btn-hover-bg);
+    border-color: var(--article-listen-btn-hover-bg);
 }
 
 /* Button text transitions */
 .article-listen-btn .btn-text {
-  transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease;
 }
 
 .article-listen-btn[data-state="loading"] .btn-text {
-  opacity: 0;
+    opacity: 0;
 }
 
 /* Progress bar animations */
 @keyframes progress-bar-stripes {
-  0% {
-    background-position: 1rem 0;
-  }
-  100% {
-    background-position: 0 0;
-  }
+    0% {
+        background-position: 1rem 0;
+    }
+    100% {
+        background-position: 0 0;
+    }
 }
 
 @keyframes btn-spinner {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Accessibility improvements */
 .article-listen-btn:focus {
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 .article-listen-btn[disabled] {
-  opacity: 0.6;
-  cursor: not-allowed;
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* Small screen adjustments */
 @media (max-width: 576px) {
-  .audio-loading {
-    padding: 0.5rem;
-    font-size: 0.85rem;
-  }
-  
-  .audio-loading .progress {
-    height: 4px;
-  }
-  
-  .article-listen-btn {
-    min-width: 40px;
-    height: 34px;
-    font-size: 0.9rem;
-  }
+    .audio-loading {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .audio-loading .progress {
+        height: 4px;
+    }
+
+    .article-listen-btn {
+        min-width: 40px;
+        height: 34px;
+        font-size: 0.9rem;
+    }
 }
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .audio-loading .progress-bar-animated {
-    animation: none;
-  }
-  
-  .article-listen-btn::after {
-    animation: none;
-  }
-  
-  .article-listen-btn,
-  .audio-loading .progress-bar {
-    transition: none;
-  }
+    .audio-loading .progress-bar-animated {
+        animation: none;
+    }
+
+    .article-listen-btn::after {
+        animation: none;
+    }
+
+    .article-listen-btn,
+    .audio-loading .progress-bar {
+        transition: none;
+    }
+}
+/* HTML5 <progress> element for audio tracking */
+.audio-progress {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background-color: var(--audio-progress-bar-bg);
+    border: none;
+    border-radius: 3px;
+    overflow: hidden;
+    transition: background-color 0.3s ease;
+}
+
+.audio-progress::-webkit-progress-bar {
+    background-color: var(--audio-progress-bar-bg);
+    border-radius: 3px;
+}
+
+.audio-progress::-webkit-progress-value {
+    background-color: var(--audio-progress-value-bg);
+    border-radius: 3px;
+    transition: width 0.4s ease, background-color 0.3s ease;
+}
+
+.audio-progress::-moz-progress-bar {
+    background-color: var(--audio-progress-value-bg);
+    border-radius: 3px;
 }
