@@ -187,5 +187,4 @@ def generate_voice_optimized_text(text, word_limit=None):
     if not core.endswith(('.', '!', '?')):
         core += '.'
 
-    return f"{intro} {core} {outro}"
-
+    return f"{intro} {core} {outro}" 
