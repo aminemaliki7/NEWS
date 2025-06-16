@@ -104,34 +104,36 @@ def generate_news_headline(article_text, article_title=""):
 
 def generate_voice_optimized_text(text, word_limit=None):
     """
-    Prepare a news article or summary for voice narration.
+    Prepare a news article or summary for voice narration with a natural intro and closure.
 
     This function ensures the content:
-    - Focuses on the most important facts (who, what, when, where, why).
-    - Brings value to the listener by delivering accurate, high-impact information.
-    - Is clear and well-structured for spoken delivery, following natural speech flow.
-    - Uses fluent, conversational language — no bullet points, fragmented phrases, or awkward transitions.
-    - Removes numbers, metadata, or references that may confuse or distract audio listeners.
-    - Ends smoothly with a soft closure if the content was truncated for length.
+    - Starts with a gentle, engaging phrase.
+    - Focuses on key facts (who, what, when, where, why).
+    - Uses fluent, conversational structure for voice delivery.
+    - Excludes numbers, references, or data not suited for audio.
+    - Ends smoothly with a conclusive phrase, even if truncated.
 
     Args:
-        text (str): The full article or summary to optimize.
-        word_limit (int): The maximum number of words to include in the voice output.
+        text (str): Full article or summary to optimize.
+        word_limit (int): Max number of words allowed in the output.
 
     Returns:
-        str: A voice-friendly, cleaned, and structured version of the text, ready for TTS generation.
+        str: Cleaned, voice-ready text with natural flow and framing.
     """
     import re
     import nltk
     from nltk.tokenize import sent_tokenize, word_tokenize
 
-    # Ensure sentence tokenizer is available
+    # Ensure required tokenizer is available
     try:
         nltk.data.find('tokenizers/punkt')
     except LookupError:
         nltk.download('punkt')
 
-    # Sentence segmentation
+    intro_phrase = "Here’s what you need to know."
+    closing_phrase = "And that’s the story for now."
+
+    # Segment into sentences
     sentences = sent_tokenize(text)
     output = []
     total_words = 0
@@ -140,30 +142,29 @@ def generate_voice_optimized_text(text, word_limit=None):
     for sent in sentences:
         words = word_tokenize(sent)
         word_count = len(words)
-        if total_words + word_count > word_limit:
+        if word_limit and total_words + word_count > word_limit:
             break
         output.append(sent.strip())
         total_words += word_count
 
-    final_text = ' '.join(output).strip()
+    # Join selected sentences
+    core_text = ' '.join(output).strip()
 
-    # Remove counts and metadata not needed in voice
-    final_text = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\b', '', final_text, flags=re.IGNORECASE)
-    final_text = re.sub(r'\b\d+\b[^\.\!\?]*$', '', final_text).strip()
-    final_text = re.sub(r'\[.*?\]', '', final_text)
-    final_text = re.sub(r'\(.*?\)', '', final_text)
-    final_text = re.sub(r'\s+', ' ', final_text).strip()
+    # Clean metadata and numbers
+    core_text = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\b', '', core_text, flags=re.IGNORECASE)
+    core_text = re.sub(r'\b\d+\b[^\.\!\?]*$', '', core_text).strip()
+    core_text = re.sub(r'\[.*?\]', '', core_text)
+    core_text = re.sub(r'\(.*?\)', '', core_text)
+    core_text = re.sub(r'\s+', ' ', core_text).strip()
 
-    # Capitalize if needed
-    if final_text and not final_text[0].isupper():
-        final_text = final_text[0].upper() + final_text[1:]
+    # Capitalize first character if needed
+    if core_text and not core_text[0].isupper():
+        core_text = core_text[0].upper() + core_text[1:]
 
-    # Ensure it ends properly
-    if not final_text.endswith(('.', '!', '?')):
-        final_text += '.'
+    # Ensure proper punctuation at end
+    if not core_text.endswith(('.', '!', '?')):
+        core_text += '.'
 
-    # Add soft closure if the content was cut short
-    if total_words < len(word_tokenize(text)):
-        final_text += " That's the latest."
-
-    return final_text
+    # Combine full output with intro and outro
+    final_output = f"{intro_phrase} {core_text} {closing_phrase}"
+    return final_output
