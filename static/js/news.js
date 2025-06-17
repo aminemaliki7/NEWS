@@ -485,75 +485,91 @@ async function listenToSummary(index, autoPlay = true) {
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     const t = translations.en;
 
-    // If another audio is playing, stop it
+    // Si un autre audio joue, l’arrêter
     if (activeAudio) {
         activeAudio.pause();
         activeAudio.currentTime = 0;
         resetAudioUI(currentPlayButton, null, null);
     }
 
-    activeAudio = new Audio(audioUrl);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
 
-    // Always require user tap on iOS (or fallback)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Préparer l’interface
+    loadingUI.classList.add('d-none');
+    listenBtn.disabled = false;
 
-    const startPlayback = () => {
-        activeAudio.play()
-            .then(() => {
-                listenBtn.innerHTML = '‖'; // Pause icon
-            })
-            .catch(err => {
-                console.error('Manual play failed:', err);
+    // iOS nécessite une interaction utilisateur : instancier l’audio DANS le clic
+    if (isIOS || !autoPlay) {
+        listenBtn.innerHTML = '🔊 Tap to play';
+        listenBtn.onclick = () => {
+            activeAudio = new Audio(audioUrl);
+
+            // Ajouter les events une fois l'audio créé
+            setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
+
+            activeAudio.play().then(() => {
+                listenBtn.innerHTML = '‖';
+            }).catch(err => {
+                console.error('Playback error:', err);
                 alert(t.audioLoadError);
             });
-    };
 
-    activeAudio.onloadeddata = () => {
-        loadingUI.classList.add('d-none');
-        listenBtn.disabled = false;
-
-        // Always require user gesture on iOS
-        if (isIOS || !autoPlay) {
+            // Gestion pause/reprise
+            listenBtn.onclick = () => {
+                if (activeAudio.paused) {
+                    activeAudio.play();
+                    listenBtn.innerHTML = '‖';
+                } else {
+                    activeAudio.pause();
+                    listenBtn.innerHTML = '▶︎';
+                }
+            };
+        };
+    } else {
+        // Desktop : autoplay autorisé
+        activeAudio = new Audio(audioUrl);
+        setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
+        activeAudio.play().then(() => {
+            listenBtn.innerHTML = '‖';
+        }).catch(err => {
+            console.warn('Autoplay blocked, switching to manual:', err);
             listenBtn.innerHTML = '🔊 Tap to play';
             listenBtn.onclick = () => {
-                startPlayback();
-                // Update onclick to toggle pause
-                listenBtn.onclick = () => {
-                    if (activeAudio.paused) {
-                        activeAudio.play();
-                        listenBtn.innerHTML = '‖';
-                    } else {
-                        activeAudio.pause();
-                        listenBtn.innerHTML = '▶︎';
-                    }
-                };
+                activeAudio.play().then(() => {
+                    listenBtn.innerHTML = '‖';
+                }).catch(err => {
+                    alert(t.audioLoadError);
+                });
             };
-        } else {
-            startPlayback();
+        });
+    }
+}
+function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
+    const t = translations.en;
+
+    audio.ontimeupdate = () => {
+        if (progressBar && audio.duration) {
+            progressBar.value = (audio.currentTime / audio.duration) * 100;
         }
     };
 
-    activeAudio.ontimeupdate = () => {
-        if (progressBar && activeAudio.duration) {
-            progressBar.value = (activeAudio.currentTime / activeAudio.duration) * 100;
-        }
-    };
-
-    activeAudio.onended = () => {
+    audio.onended = () => {
         resetAudioUI(listenBtn, loadingUI, progressBar);
         activeAudio = null;
         currentPlayButton = null;
         currentArticleIndex = null;
     };
 
-    activeAudio.onerror = () => {
-        console.error("Audio playback error:", activeAudio.error);
+    audio.onerror = () => {
+        console.error("Audio error:", audio.error);
         alert(t.audioLoadError);
         resetAudioUI(listenBtn, loadingUI, progressBar);
     };
 }
+
 
 
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
