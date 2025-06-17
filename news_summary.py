@@ -1,4 +1,4 @@
-def generate_voice_optimized_text(text, word_limit=400, include_intro=True, include_outro=True):
+def generate_voice_optimized_text(text, word_limit=None, include_intro=True, include_outro=True):
     """
     Generate clean, natural-sounding voice narration from news text.
 
@@ -79,4 +79,5 @@ def generate_voice_optimized_text(text, word_limit=400, include_intro=True, incl
         result = f"{result} {outro}"
 
     # Log the result
+    print("[Voice Optimized Text]", result)
     return result
