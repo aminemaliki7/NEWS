@@ -356,25 +356,26 @@ def news_page():
 @app.route('/api/news')
 def get_news():
     """API endpoint to fetch news from GNews"""
-    # Get query parameters
     category = request.args.get('category', 'general')
     language = request.args.get('language', 'en')
-    query = request.args.get('query', '')
-    
+    query = request.args.get('query', '').strip()
+
     try:
-        # Use our GNewsClient to fetch news
+        # If query exists and is not just whitespace, use search
         if query:
-            # If there's a search query, use search function
             results = gnews_client.search_news(query=query, language=language)
         else:
-            # Otherwise fetch top headlines
             results = gnews_client.get_top_headlines(category=category, language=language)
-        
+
         return jsonify(results)
-    
-    except Exception as e:
-        app.logger.error(f"Error fetching news: {str(e)}")
-        return jsonify({"error": str(e), "articles": []}), 500
+
+    except Exception:
+        # Return clean error message to user
+        return jsonify({
+            "error": "Sorry, we couldn't load news articles at the moment. Please try again later.",
+            "articles": []
+        }), 500
+
 
 @app.route('/api/news/content')
 def get_article_content():

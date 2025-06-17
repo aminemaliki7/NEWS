@@ -486,17 +486,34 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
     activeAudio = new Audio(audioUrl);
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
-    const t = translations.en; // Always use English translations for messages
+    const t = translations.en;
 
     activeAudio.onloadeddata = () => {
         loadingUI.classList.add('d-none');
         listenBtn.disabled = false;
 
         if (autoPlay) {
-            activeAudio.play();
-            listenBtn.innerHTML = '‖'; // Pause icon
+            activeAudio.play()
+                .then(() => {
+                    listenBtn.innerHTML = '‖'; // Pause icon
+                })
+                .catch(err => {
+                    console.warn('Autoplay failed, likely due to iOS restrictions:', err);
+                    listenBtn.innerHTML = '🔊 Tap to play';
+                    listenBtn.disabled = false;
+
+                    // Force manual play on second tap
+                    listenBtn.onclick = () => {
+                        activeAudio.play().then(() => {
+                            listenBtn.innerHTML = '‖';
+                        }).catch(err => {
+                            console.error('Manual play failed:', err);
+                            alert(t.audioLoadError);
+                        });
+                    };
+                });
         } else {
-            listenBtn.innerHTML = '▶︎ '; // Play icon
+            listenBtn.innerHTML = '▶︎'; // Play icon
         }
     };
 
@@ -508,7 +525,6 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
 
     activeAudio.onended = () => {
         resetAudioUI(listenBtn, loadingUI, progressBar);
-
         activeAudio = null;
         currentPlayButton = null;
         currentArticleIndex = null;
