@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 import threading
 from datetime import datetime
 from flask import send_file
-from news_summary import generate_news_summary, generate_voice_optimized_text
+from news_summary import  generate_voice_optimized_text
 from youtube_news_generator import generate_youtube_news_script
 
 import google.generativeai as genai
@@ -406,20 +406,7 @@ def get_article_content():
 
 
 
-@app.route('/api/news/summary', methods=['POST'])
-def generate_article_summary():
-    data = request.json
-    if not data or 'content' not in data:
-        return jsonify({"error": "No content provided"}), 400
 
-    content = data.get('content', '')
-    summary = generate_news_summary(content, max_words=100)
-
-    return jsonify({
-        "summary": summary,
-        "original_length": len(content),
-        "summary_length": len(summary)
-    })
 
 @app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():

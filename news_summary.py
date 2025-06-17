@@ -1,190 +1,60 @@
-def generate_news_summary(article_text, max_words=None):
+def generate_voice_optimized_text(text, word_limit=400, include_intro=True, include_outro=True):
     """
-    Generate a concise, meaningful extractive summary of a news article.
+    Fast and adaptive voice-ready text generation.
 
-    Prioritizes key facts and valuable sentences that provide core understanding
-    of the topic, even under a strict word limit.
-    """
-    import re
-    from collections import Counter
-    import nltk
-    from nltk.corpus import stopwords
-    from nltk.tokenize import sent_tokenize, word_tokenize
-
-    # Ensure resources
-    for res in ['punkt', 'stopwords']:
-        try:
-            nltk.data.find(f'tokenizers/{res}') if res == 'punkt' else nltk.data.find(f'corpora/{res}')
-        except LookupError:
-            nltk.download(res)
-
-    # Clean and tokenize
-    article_text = re.sub(r'\s+', ' ', article_text)
-    article_text = re.sub(r'[^\w\s.,?!]', '', article_text)
-    sentences = sent_tokenize(article_text)
-    if len(sentences) <= 2:
-        return article_text.strip()
-
-    stop_words = set(stopwords.words('english'))
-    words = word_tokenize(article_text.lower())
-    filtered_words = [w for w in words if w.isalnum() and w not in stop_words]
-    word_freq = Counter(filtered_words)
-
-    value_keywords = [
-        'announced', 'confirmed', 'revealed', 'report', 'reports',
-        'officials', 'statement', 'warned', 'according to',
-        'update', 'data', 'study', 'survey', 'found'
-    ]
-
-    sentence_scores = {}
-    for i, sentence in enumerate(sentences):
-        sentence_lower = sentence.lower()
-        score = sum(word_freq.get(w, 0) for w in word_tokenize(sentence_lower))
-        bonus = sum(1 for kw in value_keywords if kw in sentence_lower) * 2
-        sentence_scores[i] = score + bonus
-
-    # Select top sentences preserving order
-    top_sentences = sorted(sentence_scores.items(), key=lambda x: x[1], reverse=True)
-    selected = []
-    total_words = 0
-    used_indexes = set()
-
-    for idx, _ in top_sentences:
-        if idx in used_indexes:
-            continue
-        sent = sentences[idx]
-        wc = len(word_tokenize(sent))
-        if max_words and total_words + wc > max_words:
-            continue
-        selected.append(sent.strip())
-        total_words += wc
-        used_indexes.add(idx)
-        if max_words and total_words >= max_words:
-            break
-
-    return ' '.join(selected).strip()
-
-
-
-def generate_news_headline(article_text, article_title=""):
-    """
-    Generate a clean, short, and informative headline from article text or title.
+    - Cleans basic formatting.
+    - Limits the number of words.
+    - Strips any HTML tags that might be spoken during TTS.
+    - Ensures character counts or counts-related phrases are excluded.
+    - Contextual intro/outro based on content.
+    - Intro/outro can be toggled with parameters.
     """
     import re
-    import nltk
-    from nltk.tokenize import sent_tokenize
-
-    if article_title:
-        clean_title = re.sub(r'[^\w\s]', '', article_title).strip()
-        words = clean_title.split()
-        return ' '.join(words[:8]) + ('...' if len(words) > 8 else '')
-
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
-
-    sentences = sent_tokenize(article_text)
-    if not sentences:
-        return "Latest Update"
-
-    first_sentence = re.sub(r'[^\w\s]', '', sentences[0]).strip()
-    words = first_sentence.split()
-    return ' '.join(words[:8]) + ('...' if len(words) > 8 else '')
-
-def generate_voice_optimized_text(text, word_limit=None):
-    """
-    Generate a voice-friendly version of a news summary with contextual intro and outro.
-
-    - Picks a natural-sounding intro/outro based on tone.
-    - Adds commas to improve flow.
-    - Cleans the text for narration.
-    - Limits total words to improve pacing and control.
-
-    Args:
-        text (str): Original article or summary.
-        word_limit (int): Optional max word limit.
-
-    Returns:
-        str: Narration-optimized text.
-    """
-    import re
-    import nltk
     import random
-    from nltk.tokenize import sent_tokenize, word_tokenize
 
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
+    # Remove HTML tags
+    text = re.sub(r'<[^>]*?>', '', text)
 
-    # Possible intros and outros to vary toneeeeeeeeeeeeeeeeeeeeeeeeeeeee
-    intros = [
-        "Here’s what you need to know.",
-        "Let’s break it down.",
-        "Here’s what’s unfolding.",
-        "Take a moment to catch up.",
-        "A quick look at what’s happening:"
-    ]
+    # Basic cleanup: remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
 
-    outros = [
-        "Check the full article for more information.",
-        "That’s the latest for now.",
-        "For full context, read the complete report.",
-        "More details are available in the full article.",
-        "Stay tuned for further updates."
-    ]
+    # Remove patterns related to character or word counts
+    text = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\b', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b\d+\b[^\.\!\?]*$', '', text).strip()
 
-    # Analyze text to adjust tone
-    def is_serious(text):
-        serious_words = ['died', 'crisis', 'warning', 'emergency', 'conflict', 'breaking', 'fatal', 'evacuated']
-        return any(word in text.lower() for word in serious_words)
+    # Word limit
+    words = text.split()
+    trimmed_text = ' '.join(words[:word_limit])
 
-    intro = "Here’s what you need to know."
-    outro = "Check the full article for more information."
-    if is_serious(text):
-        intro = "Here’s what’s unfolding."
-        outro = "More details are available in the full article."
+    # Context-aware intros/outros
+    serious_keywords = ['died', 'crisis', 'emergency', 'fatal', 'evacuated', 'conflict', 'breaking']
+    light_keywords = ['celebration', 'festival', 'launch', 'award', 'fun']
+
+    is_serious = any(word in text.lower() for word in serious_keywords)
+    is_light = any(word in text.lower() for word in light_keywords)
+
+    intros_serious = ["Here's what’s unfolding:", "Urgent update:", "What you need to know now:"]
+    intros_light = ["Let’s break it down:", "Catch up on this:", "Here's the latest:"]
+    intros_neutral = ["Here’s what you need to know:", "Quick summary:", "The key points are:"]
+
+    outros_serious = ["Stay alert for more updates.", "More details in the full article.", "Follow developments closely."]
+    outros_light = ["That’s the scoop.", "Check the full article for more fun.", "Enjoy the full story online."]
+    outros_neutral = ["For more details, check the full article.", "You can read the full article for more.", "That’s the main idea."]
+
+    if is_serious:
+        intro = random.choice(intros_serious)
+        outro = random.choice(outros_serious)
+    elif is_light:
+        intro = random.choice(intros_light)
+        outro = random.choice(outros_light)
     else:
-        intro = random.choice(intros)
-        outro = random.choice(outros)
+        intro = random.choice(intros_neutral)
+        outro = random.choice(outros_neutral)
 
-    # Extract core sentences
-    sentences = sent_tokenize(text)
-    output, total_words = [], 0
+    result = trimmed_text
+    if include_intro:
+        result = f"{intro} {result}"
+    if include_outro:
+        result = f"{result} {outro}"
 
-    for sent in sentences:
-        wc = len(word_tokenize(sent.strip()))
-        if wc < 5:
-            continue
-        if word_limit and total_words + wc > word_limit:
-            break
-        output.append(sent.strip())
-        total_words += wc
-
-    if not output:
-        return f"{intro} {outro}"
-
-    # Add commas for flow every 2–3 sentences
-    core = ''
-    for i, sentence in enumerate(output):
-        if i > 0 and i % random.choice([2, 3]) == 0:
-            core += ', '
-        elif i > 0:
-            core += ' '
-        core += sentence
-
-    # Clean unwanted patterns
-    core = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\b', '', core, flags=re.IGNORECASE)
-    core = re.sub(r'\b\d+\b[^\.\!\?]*$', '', core).strip()
-    core = re.sub(r'\[.*?\]|\(.*?\)', '', core)
-    core = re.sub(r'\s+', ' ', core).strip()
-
-    # Capitalize first word if needed
-    if core and not core[0].isupper():
-        core = core[0].upper() + core[1:]
-
-    if not core.endswith(('.', '!', '?')):
-        core += '.'
-
-    return f"{intro} {core} {outro}" 
+    return result
