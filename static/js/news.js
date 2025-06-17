@@ -483,37 +483,55 @@ async function listenToSummary(index, autoPlay = true) {
 }
 
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
+    const t = translations.en;
+
+    // If another audio is playing, stop it
+    if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        resetAudioUI(currentPlayButton, null, null);
+    }
+
     activeAudio = new Audio(audioUrl);
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
-    const t = translations.en;
+
+    // Always require user tap on iOS (or fallback)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    const startPlayback = () => {
+        activeAudio.play()
+            .then(() => {
+                listenBtn.innerHTML = '‖'; // Pause icon
+            })
+            .catch(err => {
+                console.error('Manual play failed:', err);
+                alert(t.audioLoadError);
+            });
+    };
 
     activeAudio.onloadeddata = () => {
         loadingUI.classList.add('d-none');
         listenBtn.disabled = false;
 
-        if (autoPlay) {
-            activeAudio.play()
-                .then(() => {
-                    listenBtn.innerHTML = '‖'; // Pause icon
-                })
-                .catch(err => {
-                    console.warn('Autoplay failed, likely due to iOS restrictions:', err);
-                    listenBtn.innerHTML = '🔊 Tap to play';
-                    listenBtn.disabled = false;
-
-                    // Force manual play on second tap
-                    listenBtn.onclick = () => {
-                        activeAudio.play().then(() => {
-                            listenBtn.innerHTML = '‖';
-                        }).catch(err => {
-                            console.error('Manual play failed:', err);
-                            alert(t.audioLoadError);
-                        });
-                    };
-                });
+        // Always require user gesture on iOS
+        if (isIOS || !autoPlay) {
+            listenBtn.innerHTML = '🔊 Tap to play';
+            listenBtn.onclick = () => {
+                startPlayback();
+                // Update onclick to toggle pause
+                listenBtn.onclick = () => {
+                    if (activeAudio.paused) {
+                        activeAudio.play();
+                        listenBtn.innerHTML = '‖';
+                    } else {
+                        activeAudio.pause();
+                        listenBtn.innerHTML = '▶︎';
+                    }
+                };
+            };
         } else {
-            listenBtn.innerHTML = '▶︎'; // Play icon
+            startPlayback();
         }
     };
 
@@ -536,6 +554,7 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
         resetAudioUI(listenBtn, loadingUI, progressBar);
     };
 }
+
 
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
     if (loadingUI) loadingUI.classList.add('d-none');
