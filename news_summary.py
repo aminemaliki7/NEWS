@@ -118,7 +118,7 @@ def generate_voice_optimized_text(text, word_limit=None):
     except LookupError:
         nltk.download('punkt')
 
-    # Possible intros and outros to vary tone
+    # Possible intros and outros to vary toneeeeeeeeeeeeeeeeeeeeeeeeeeeee
     intros = [
         "Here’s what you need to know.",
         "Let’s break it down.",
@@ -187,5 +187,4 @@ def generate_voice_optimized_text(text, word_limit=None):
     if not core.endswith(('.', '!', '?')):
         core += '.'
 
-    return f"{intro} {core} {outro}"
-
+    return f"{intro} {core} {outro}" 
