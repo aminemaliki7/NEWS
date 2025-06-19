@@ -372,7 +372,7 @@ def get_news():
     except Exception:
         # Return clean error message to user
         return jsonify({
-            "error": "Sorry, we couldn't load news articles at the moment. Please try again later.",
+            "error": "Sorry, we couldn't load news articles at the moment. Please try again later .",
             "articles": []
         }), 500
 
