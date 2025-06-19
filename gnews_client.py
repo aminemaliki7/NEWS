@@ -7,22 +7,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class GNewsClient:
-    """Client for interacting with the GNews API"""
+    """Client for interacting with the GNews API (with multi-key failover)"""
     
     def __init__(self):
-        self.api_key = os.getenv('GNEWS_API_KEY')
-        if not self.api_key:
-            raise ValueError("GNEWS_API_KEY not found in environment variables")
+        # Load 5 API keys from .env
+        self.api_keys = [
+            os.getenv('GNEWS_API_KEY_1'),
+            os.getenv('GNEWS_API_KEY_2'),
+            os.getenv('GNEWS_API_KEY_3'),
+            os.getenv('GNEWS_API_KEY_4'),
+            os.getenv('GNEWS_API_KEY_5')
+        ]
         
+        if not any(self.api_keys):
+            raise ValueError("No GNEWS_API_KEY_X set in .env")
+        
+        self.api_index = 0
         self.base_url = "https://gnews.io/api/v4"
     
     def get_top_headlines(self, category=None, language="en", country="us", max_results=10, query=None):
-        """
-        Fetch top headlines from GNews
-        """
         endpoint = f"{self.base_url}/top-headlines"
+        
         params = {
-            "token": self.api_key,
             "lang": language,
             "country": country,
             "max": max_results
@@ -30,29 +36,49 @@ class GNewsClient:
         
         if category and category != "all":
             params["topic"] = category
-            
+        
         if query:
             params["q"] = query
         
-        try:
-            response = requests.get(endpoint, params=params)
-            response.raise_for_status()  # Raise exception for error status codes
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching top headlines: {e}")
-            # Safe return: DO NOT expose the token
-            return {
-                "articles": [],
-                "error": "Unable to load articles at the moment. Please try again later. "
-            }
+        MAX_RETRIES = len(self.api_keys)
+        
+        for attempt in range(MAX_RETRIES):
+            current_token = self.api_keys[self.api_index]
+            if not current_token:
+                print(f"[GNews] Skipping empty key at index {self.api_index + 1}")
+                self.api_index = (self.api_index + 1) % MAX_RETRIES
+                continue
+            
+            params["token"] = current_token
+            
+            try:
+                response = requests.get(endpoint, params=params)
+                response.raise_for_status()
+                return response.json()
+            
+            except requests.exceptions.HTTPError as e:
+                print(f"[GNews] API key {self.api_index + 1} failed: {e}")
+                
+                if response.status_code in [401, 403, 429]:
+                    # Rotate to next key
+                    self.api_index = (self.api_index + 1) % MAX_RETRIES
+                    continue
+                else:
+                    break
+            
+            except requests.exceptions.RequestException as e:
+                print(f"[GNews] Request error: {e}")
+                break
+        
+        return {
+            "articles": [],
+            "error": "Unable to load articles at the moment."
+        }
     
     def search_news(self, query, language="en", country="us", max_results=10, from_date=None, to_date=None):
-        """
-        Search for news articles
-        """
         endpoint = f"{self.base_url}/search"
+        
         params = {
-            "token": self.api_key,
             "q": query,
             "lang": language,
             "country": country,
@@ -61,26 +87,44 @@ class GNewsClient:
         
         if from_date:
             params["from"] = from_date
-            
         if to_date:
             params["to"] = to_date
         
-        try:
-            response = requests.get(endpoint, params=params)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error searching news: {e}")
-            # Safe return: DO NOT expose the token
-            return {
-                "articles": [],
-                "error": "Unable to load articles at the moment.Please try again later."
-            }
-
+        MAX_RETRIES = len(self.api_keys)
+        
+        for attempt in range(MAX_RETRIES):
+            current_token = self.api_keys[self.api_index]
+            if not current_token:
+                print(f"[GNews] Skipping empty key at index {self.api_index + 1}")
+                self.api_index = (self.api_index + 1) % MAX_RETRIES
+                continue
+            
+            params["token"] = current_token
+            
+            try:
+                response = requests.get(endpoint, params=params)
+                response.raise_for_status()
+                return response.json()
+            
+            except requests.exceptions.HTTPError as e:
+                print(f"[GNews] API key {self.api_index + 1} failed: {e}")
+                
+                if response.status_code in [401, 403, 429]:
+                    self.api_index = (self.api_index + 1) % MAX_RETRIES
+                    continue
+                else:
+                    break
+            
+            except requests.exceptions.RequestException as e:
+                print(f"[GNews] Request error: {e}")
+                break
+        
+        return {
+            "articles": [],
+            "error": "Unable to load articles at the moment."
+        }
+    
     def fetch_article_content(self, url):
-        """
-        Fetch and extract content from a news article
-        """
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -132,12 +176,12 @@ class GNewsClient:
                 "url": url,
                 "extraction_time": datetime.now().isoformat()
             }
-            
+        
         except Exception as e:
-            print(f"Error extracting article content: {e}")
+            print(f"[GNews] Error extracting article content: {e}")
             return {
                 "title": "Content Extraction Failed",
-                "content": f"Unable to extract content from {url}. Error occurred.",
+                "content": "Unable to extract content from this article.",
                 "url": url,
                 "error": "Content extraction failed"
             }
@@ -173,23 +217,6 @@ class GNewsClient:
                 print(f"Error in selector {selector}: {e}")
                 continue
         
-        main_selectors = ['main', '#main', '.main', 'article']
-        for selector in main_selectors:
-            try:
-                if selector.startswith('.') or selector.startswith('#'):
-                    elements = soup.select(selector)
-                else:
-                    elements = soup.find_all(selector)
-                
-                for element in elements:
-                    paragraphs = element.find_all('p')
-                    if paragraphs:
-                        content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 0])
-                        if len(content) > 200:
-                            return content
-            except Exception:
-                continue
-                
         paragraphs_by_parent = {}
         for p in soup.find_all('p'):
             parent = p.parent
@@ -204,7 +231,7 @@ class GNewsClient:
             main_parent = sorted_parents[0]
             paragraphs = paragraphs_by_parent[main_parent]
             content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 0])
-            
+        
         return content
     
     def _extract_text_from_json(self, json_data):
@@ -220,7 +247,6 @@ class GNewsClient:
         elif 'article' in json_data and 'title' in json_data['article']:
             return json_data['article']['title']
         return "Article Title"
-
 
 # Example usage
 if __name__ == "__main__":

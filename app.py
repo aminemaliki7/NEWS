@@ -590,6 +590,17 @@ def translate_text():
         app.logger.error(f"Error translating text with Gemini: {e}")
         return jsonify({"error": f"Failed to translate text: {str(e)}"}), 500
     
+@app.route('/api/news/test-keys')
+def test_gnews_keys():
+    current_key_index = gnews_client.api_index + 1  # Human-readable (1-5)
+    total_keys = len(gnews_client.api_keys)
+    
+    return jsonify({
+        "current_api_key_index": current_key_index,
+        "total_api_keys": total_keys,
+        "status": "OK"
+    })
+
 
     
 
