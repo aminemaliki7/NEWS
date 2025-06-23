@@ -707,7 +707,7 @@ function loadComments(articleId, container) {
                     }
                     
                     commentEl.innerHTML = `
-                        <span class="fw-bold me-1 comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname || 'Anonymous')}:</span>
+                        <span class="fw-bold me-1 comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname)}:</span>
                         <span class="comment-text text-dark" style="font-size: 0.8em;">${escapeHtml(comment.comment)}</span>
                         <br><small class="text-muted" style="font-size: 0.7em;">${formattedDate}</small>
                     `;
@@ -740,15 +740,11 @@ function setupCommentForms() {
         // Load comments on page load
         loadComments(articleId, container);
 
-        // Remove any existing event listeners to prevent duplicates
-        // This is a common pattern when you re-render or dynamically add elements
-        // and want to ensure listeners are clean.
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         
-        // Add event listener to the new form
         newForm.addEventListener('submit', e => {
-            e.preventDefault(); // Prevent default form submission
+            e.preventDefault();
 
             const nickname = newForm.nickname.value.trim();
             const commentText = newForm.comment.value.trim();
@@ -759,38 +755,35 @@ function setupCommentForms() {
                 return;
             }
 
-            // Disable submit button to prevent double submission and provide feedback
             submitBtn.disabled = true;
             submitBtn.textContent = 'Posting...';
+
+            // Build payload
+            const payload = {
+                article_id: articleId,
+                comment_text: commentText
+            };
+
+            if (nickname) {
+                payload.nickname = nickname;  // only send if filled
+            }
 
             fetch('/api/article-comment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    article_id: articleId,
-                    nickname: nickname || 'Anonymous', // Use 'Anonymous' if nickname is empty
-                    comment_text: commentText
-                })
+                body: JSON.stringify(payload)
             })
             .then(response => response.json())
             .then(data => {
-                if (data.error) {
-                    // If the API returns an error message, throw it
-                    throw new Error(data.error);
-                }
-                newForm.reset(); // Clear the form fields after successful post
-                loadComments(articleId, container); // Reload comments to show the new one
-                
-                // --- REMOVED SUCCESS MESSAGE LOGIC HERE ---
-                // No need for explicit success message as comments list reloads.
+                if (data.error) throw new Error(data.error);
+                newForm.reset();
+                loadComments(articleId, container);
             })
             .catch(err => {
                 console.error('Error posting comment:', err);
-                // Provide alert for error feedback
                 alert('Error posting comment. Please try again.');
             })
             .finally(() => {
-                // Always re-enable submit button and restore its text
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Post';
             });

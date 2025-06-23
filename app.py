@@ -51,16 +51,30 @@ firebase_config = {
 # cred = credentials.Certificate('serviceAccountKey.json')  # You need to download serviceAccountKey.json from Firebase settings
 # firebase_admin.initialize_app(cred)
 
-# API — Subscribe Newsletter
+# API — Article Comment
 @app.route('/api/article-comment', methods=['POST'])
 def post_comment():
     data = request.json
     article_id = data.get('article_id')
     comment_text = data.get('comment_text', '').strip()
-    nickname = data.get('nickname', 'Anonymous')
+    nickname = data.get('nickname', '').strip()
 
     if not article_id or not comment_text:
         return jsonify({"error": "Missing article_id or comment_text"}), 400
+
+    # If no nickname provided — generate a subtle reference nickname
+    if not nickname:
+        import random
+        random_names = [
+            "Orwellian", "Tarkovsky", "Aletheia", "NovaScript", "ShinjukuEcho",
+            "Casablanca27", "InkRunner", "Byzantium", "Satori", "Hikari",
+            "Rocinante", "Arcadia", "Zephyr42", "Athenaeum", "Obsidian",
+            "LisboaVox", "TwelveMonkeys", "Monolith", "OsloMind", "Halcyon",
+            "Cinephile", "NeoNomad", "NorthByWest", "Palimpsest", "LouvreLens",
+            "Kafkaesque", "GhibliWaves", "Mirage", "VeronaCall", "Ozymandias",
+            "ElysiumTrace", "EdoRunner", "PolarisPoint", "HelsinkiTone", "MemphisInk"
+        ]
+        nickname = random.choice(random_names)
 
     try:
         # Each article will be a collection
@@ -72,9 +86,10 @@ def post_comment():
             'timestamp': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"message": "Comment posted"})
+        return jsonify({"message": "Comment posted", "nickname": nickname})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # API — Article Comment
 @app.route('/api/article-comments', methods=['GET'])
