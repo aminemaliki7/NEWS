@@ -5,7 +5,7 @@ import time
 import json
 import threading
 import uuid
-from flask import Flask, request, render_template, redirect, url_for, send_file, jsonify, session
+from flask import Flask, Response, request, render_template, redirect, url_for, send_file, jsonify, session
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from news_summary import generate_voice_optimized_text
@@ -16,6 +16,7 @@ from gnews_client import GNewsClient
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
+from flask import send_file
 
 
 
@@ -198,9 +199,24 @@ def run_async_task(coroutine, job_id):
 # Routes
 @app.route('/')
 def index():
-    # Check if there's a prefill parameter
+    """Render the home page with latest news (default = general)"""
     prefill = request.args.get('prefill', '')
-    return render_template('news.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES, prefill=prefill)
+
+    try:
+        first_articles = gnews_client.get_top_headlines(category='general', language='en')
+        articles = first_articles.get('articles', [])
+    except Exception as e:
+        app.logger.error(f"GNews API error on index: {e}")
+        articles = []
+
+    return render_template(
+        'news.html',
+        voices=AVAILABLE_VOICES,
+        languages=AVAILABLE_LANGUAGES,
+        articles=articles,
+        prefill=prefill
+    )
+
 
 # Update the upload route to store the title
 @app.route('/upload', methods=['POST'])
@@ -391,11 +407,14 @@ def _jinja2_filter_datetime(timestamp):
     dt = datetime.fromtimestamp(timestamp)
     return dt.strftime('%Y-%m-%d %H:%M')
 
-@app.route('/shorts-generator')
-def shorts_generator():
-    """Route for the AI shorts script generator page"""
-    return render_template('shorts_generator.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES)
 
+@app.route('/about')
+def about_page():
+    return render_template('about.html')
+
+@app.route('/contact')
+def contact_page():
+    return render_template('contact.html')
 
 # Add a conversion option to send downloaded audio to voice generator
 @app.route('/convert-to-voice/<download_id>')
@@ -412,15 +431,34 @@ def convert_to_voice(download_id):
     # Redirect to the main voice generator page with a parameter
     # to indicate we want to use this audio file
     return redirect(url_for('index', audio_source=download_id))
+@app.route('/robots.txt')
+def robots():
+    content = """User-agent: *
+Disallow:
+Sitemap: https://newsnap.space/sitemap.xml"""
+    return Response(content, mimetype='text/plain')
+@app.route('/sitemap.xml')
+def sitemap():
+    return send_file('sitemap.xml', mimetype='application/xml')
+
 
 @app.route('/news')
 def news_page():
     """Render the news reader page"""
-    # Get the same voice and language data you use for your main page
-    languages = AVAILABLE_LANGUAGES  # Use the existing AVAILABLE_LANGUAGES variable
-    voices = AVAILABLE_VOICES  # Use the existing AVAILABLE_VOICES variable
+    try:
+        first_articles = gnews_client.get_top_headlines(category='general', language='en')
+        articles = first_articles.get('articles', [])
+    except Exception as e:
+        app.logger.error(f"GNews API error: {e}")
+        articles = []
+
+    # Get the same voice and language data
+    languages = AVAILABLE_LANGUAGES
+    voices = AVAILABLE_VOICES
     
-    return render_template('news.html', languages=languages, voices=voices)
+    # Render the template (even if articles = [])
+    return render_template('news.html', languages=languages, voices=voices, articles=articles)
+
 
 @app.route('/api/news')
 def get_news():
