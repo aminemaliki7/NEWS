@@ -114,6 +114,12 @@ def get_comments():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/privacy-policy')
+def privacy_policy():
+    return render_template('privacy-policy.html')
+@app.route('/terms-of-service')
+def terms():
+    return render_template('terms.html')
 
 
 # 404 / 500 handlers
