@@ -1,83 +1,111 @@
-def generate_voice_optimized_text(text, word_limit=None, include_intro=True, include_outro=True):
+import re
+import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def generate_voice_optimized_text(text, word_limit=180, include_intro=True, include_outro=True):
     """
-    Generate clean, natural-sounding voice narration from news text.
-
-    🔹 Removes HTML, extra whitespace, and irrelevant word/char count references.
-    🔹 Limits output by sentence count, ensuring complete thoughts (not mid-sentence).
-    🔹 Expands common acronyms for clarity in TTS (e.g., 'NAHB' → 'National Association of Home Builders').
-    🔹 Dynamically adds intro and outro phrases based on tone (serious, light, neutral).
-    🔹 Logs the result for debugging and voice script validation.
-
-    Params:
-        text (str): Raw news article or excerpt
-        word_limit (int): Max number of words (by complete sentences)
-        include_intro (bool): If True, prepends a tone-matching intro
-        include_outro (bool): If True, appends a tone-matching outro
-
-    Returns:
-        str: Cleaned, optimized narration-ready text string
+    Generate professional voice narration for YouTube or Reels news.
+    Shortens content to the key points, removes fluff, and formats for natural news voiceover.
     """
-    import re
-    import random
 
-    # Step 1: Clean raw HTML and whitespace
+    logger.info(f"Input text length: {len(text)} characters")
+    logger.info(f"Input preview: {text[:100]}...")
+
+    # Step 1: Clean HTML and noise
+    original_text = text
     text = re.sub(r'<[^>]*?>', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    text = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\b', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b\d+\b[^\.\!\?]*$', '', text).strip()
+    text = re.sub(r'\bIn Brief\b', '', text, flags=re.IGNORECASE).strip()
+    text = re.sub(r'\[\s*\]', '', text).strip()
+    text = re.sub(r'\[\s*\.\.\.\s*\]', '', text).strip()
+    text = re.sub(r'\b(read|continue|full story|page|story|article|report)\s+(more|here|now|today)\b', '', text, flags=re.IGNORECASE).strip()
+    text = re.sub(r'\b\d+\s*(chars?|characters?|words?|mots?)\s*\b', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bpage\s+\d+\s*$', '', text, flags=re.IGNORECASE).strip()
+    text = re.sub(r'\s*\(.*?\)\s*', ' ', text)
+    text = re.sub(r'(\w+), (and \w+)', r'\1 \2', text)
+    text = re.sub(r'\.{3,}', '.', text)
+    text = re.sub(r'\s*([,;:.!?])\s*', r'\1 ', text)
+    text = re.sub(r'([.,!?;:])(?=\S)', r'\1 ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
 
-    # Step 2: Limit to complete sentences within word count
-    sentences = re.split(r'(?<=[\.\?!])\s+', text)
-    selected_sentences, total_words = [], 0
-    for sentence in sentences:
-        wc = len(sentence.split())
-        if total_words + wc <= word_limit:
-            selected_sentences.append(sentence)
-            total_words += wc
-        else:
-            break
-    trimmed_text = ' '.join(selected_sentences)
+    logger.info(f"After cleaning text length: {len(text)} characters")
+    logger.info(f"Cleaned preview: {text[:100]}...")
 
-    # Step 3: Tone detection for intro/outro
-    serious_keywords = ['died', 'crisis', 'emergency', 'fatal', 'evacuated', 'conflict', 'breaking']
-    light_keywords = ['celebration', 'festival', 'launch', 'award', 'fun']
+    if len(text) < len(original_text) * 0.3:
+        logger.warning("Cleaning removed too much content, using original text")
+        text = original_text.strip()
+
+    trimmed_text = text
+
+    # Step 2: Intro/Outro (more professional)
+    serious_keywords = ['died', 'crisis', 'emergency', 'fatal', 'evacuated', 'conflict', 'breaking', 'tragedy', 'attack', 'warning', 'disaster', 'protest', 'fire', 'flood', 'investigation', 'arrest', 'charges']
     is_serious = any(word in text.lower() for word in serious_keywords)
-    is_light = any(word in text.lower() for word in light_keywords)
 
     intros = {
-        'serious': ["Here's what’s unfolding:", "Urgent update:", "What you need to know now:"],
-        'light': ["Let’s break it down:", "Catch up on this:", "Here's the latest:"],
-        'neutral': ["Here’s what you need to know:", "Quick summary:", "The key points are:"]
+        'serious': [
+            "Here is the latest breaking news.",
+            "An important update from our newsroom.",
+            "Developing story:"
+        ],
+        'neutral': [
+            "Here is today’s top story.",
+            "This is the latest update.",
+            "Today’s headline news:"
+        ]
     }
 
-    outros = {
-        'serious': ["Stay alert for more updates.", "More details in the full article.", "Follow developments closely."],
-        'light': ["That’s the scoop.", "Check the full article for more fun.", "Enjoy the full story online."],
-        'neutral': ["For more details, check the full article.", "You can read the full article for more.", "That’s the main idea."]
-    }
+    intro = random.choice(intros['serious' if is_serious else 'neutral'])
+    outro = "For more updates, stay tuned."
 
-    tone = 'serious' if is_serious else 'light' if is_light else 'neutral'
-    intro = random.choice(intros[tone])
-    outro = random.choice(outros[tone])
-
-    # Step 4: Expand known acronyms
+    # Step 3: Expand acronyms
     acronym_expansions = {
         "NAHB": "the National Association of Home Builders",
         "WHO": "the World Health Organization",
         "UNESCO": "UNESCO, the United Nations Educational, Scientific and Cultural Organization",
         "NASA": "the U.S. space agency NASA",
-        "FBI": "the Federal Bureau of Investigation"
+        "FBI": "the Federal Bureau of Investigation",
+        "CEO": "Chief Executive Officer",
+        "AI": "Artificial Intelligence",
+        "UN": "United Nations",
+        "GDP": "Gross Domestic Product",
+        "COVID": "COVID-19",
+        "NYC": "New York City",
+        "US": "United States",
+        "UK": "United Kingdom",
+        "EU": "European Union"
     }
+
     for acro, expansion in acronym_expansions.items():
         trimmed_text = re.sub(rf'\b{acro}\b', expansion, trimmed_text)
 
-    # Step 5: Build final result
+    # Step 4: Word limit (actual summarization step)
+    words = trimmed_text.split()
+    if word_limit and len(words) > word_limit:
+        logger.info(f"Applying word limit: {word_limit} words (from {len(words)})")
+        trimmed_text = ' '.join(words[:word_limit])
+
+        # Try to end at sentence boundary:
+        last_period = trimmed_text.rfind('.')
+        if last_period > word_limit * 3:  # reasonable cutoff
+            trimmed_text = trimmed_text[:last_period + 1]
+        else:
+            trimmed_text += '.'
+
+    # Step 5: Final result
     result = trimmed_text
     if include_intro:
         result = f"{intro} {result}"
     if include_outro:
         result = f"{result} {outro}"
 
-    # Log the result
+    if result and not result.rstrip().endswith(('.', '!', '?')):
+        result = result.rstrip() + '.'
+
+    logger.info(f"Final result length: {len(result)} characters")
+    logger.info(f"Final result preview: {result[:50]}...{result[-50:]}")
+    
     print("[Voice Optimized Text]", result)
     return result

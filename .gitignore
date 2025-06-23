@@ -1,5 +1,8 @@
-.env
+# .gitignore
 __pycache__/
 *.pyc
-uploads/
-outputs/
+venv/
+.env
+serviceAccountKey.json
+app.log
+static/audio/*.mp3

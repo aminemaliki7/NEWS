@@ -129,30 +129,85 @@ function initializeTheme() {
     }
 }
 
-// Simplified function to only add theme control
 function addThemeControl() {
     const header = document.querySelector('.container-fluid') || document.body;
     const controlsHTML = `
-        <div class="theme-controls d-flex align-items-center gap-3 mb-3">
+        <div class="theme-controls d-flex justify-content-between align-items-center mb-3 px-3" style="width: 100%;">
             <div class="theme-toggle">
                 <button id="themeToggle" class="btn btn-outline-secondary btn-sm">
                     <span class="theme-icon">${darkMode ? '☀️' : '🌙'}</span>
                     <span class="theme-text">${translations.en[darkMode ? 'lightMode' : 'darkMode']}</span>
                 </button>
             </div>
+
+            <div class="newsletter-subscribe">
+                <button id="newsletterBtn" class="btn btn-outline-primary btn-sm">
+                    Newsletter
+                </button>
+            </div>
         </div>
     `;
 
-    // Ensure the theme controls are added only once and in the right place
-    if (!document.getElementById('themeToggle')) { // Check if already added
+    if (!document.getElementById('themeToggle')) {
         if (header.firstChild) {
             header.insertAdjacentHTML('afterbegin', controlsHTML);
         } else {
             header.innerHTML = controlsHTML + header.innerHTML;
         }
+
         document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+        document.getElementById('newsletterBtn').addEventListener('click', openNewsletterPopup);
     }
 }
+function openNewsletterPopup() {
+    const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('newsletterForm');
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const email = document.getElementById('newsletterEmail').value.trim();
+        if (!email || !email.includes('@')) {
+            alert('Please enter a valid email address.');
+            return;
+        }
+
+        const categories = [];
+        document.querySelectorAll('#newsletterForm input[type="checkbox"]:checked').forEach(checkbox => {
+            categories.push(checkbox.value);
+        });
+
+        fetch('/api/newsletter-subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: email,
+                categories: categories
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Subscription failed: ' + data.error);
+            } else {
+                alert('Thank you for subscribing! 📬');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
+                modal.hide();
+                form.reset();
+            }
+        })
+        .catch(err => {
+            console.error('Subscription error:', err);
+            alert('An error occurred. Please try again later.');
+        });
+    });
+});
+
+
+
 
 function toggleTheme() {
     darkMode = !darkMode;
@@ -233,7 +288,11 @@ async function loadNews() {
         if (data.error) throw new Error(data.error);
         articles = data.articles || [];
         if (!articles.length) return showEmpty();
-        displayNews(articles);
+        
+        displayNews(articles);  // Render articles
+
+        setupCommentForms();    // Load comments for each article ⬅️ VERY IMPORTANT
+
         hideStates();
     } catch (error) {
         console.error('Error loading news:', error);
@@ -274,22 +333,26 @@ function createArticleElement(article, index) {
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
     listenBtn.innerHTML = '▶︎ '; // Ensure space for icon
-    listenBtn.title = translations.en.listen; // Set tooltip
+    listenBtn.title = t.listen; // Set tooltip
     listenBtn.onclick = () => listenToSummary(index);
 
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
-    // Set default selected voice based on localStorage or a fallback
     voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural'; // Default to an English voice
-
 
     const progress = template.querySelector('.audio-progress');
     progress.style.display = 'none';
     progress.value = 0;
 
+    // Generate unique article_id based on URL (safe for Firestore)
+    const articleId = btoa(article.url || article.title || article.publishedAt || `${index}`);
+    template.querySelector('.article-comments').dataset.articleId = articleId;
+
     return template;
 }
+
+
 
 function stopActiveAudio() {
     if (activeAudio) {
@@ -378,10 +441,10 @@ async function listenToSummary(index, autoPlay = true) {
     if (activeAudio && currentArticleIndex === index) {
         if (activeAudio.paused) {
             activeAudio.play();
-            listenBtn.innerHTML = '‖'; // Pause emoji
+            listenBtn.innerHTML = '‖';
         } else {
             activeAudio.pause();
-            listenBtn.innerHTML = '▶︎'; // Play emoji
+            listenBtn.innerHTML = '▶︎';
         }
         return;
     }
@@ -396,7 +459,6 @@ async function listenToSummary(index, autoPlay = true) {
         return;
     }
 
-    // Generate new audio
     stopActiveAudio();
     currentArticleIndex = index;
 
@@ -404,12 +466,31 @@ async function listenToSummary(index, autoPlay = true) {
     progressBar.style.display = 'block';
     progressBar.value = 0;
     listenBtn.disabled = true;
-    listenBtn.innerHTML = '⏳'; // Loading emoji
+    listenBtn.innerHTML = '⏳';
 
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     const langCode = selectedVoice.split('-')[0];
-    const rawText = article.content || article.description || article.full_content || article.title || '';
+
+    // --- NEW: Fetch full article content if needed ---
+    if (!article.full_content || article.full_content.length < 500) {
+        console.log('Fetching full article content...');
+        try {
+            const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
+            const result = await res.json();
+            if (result.content && result.content.length > 500) {
+                article.full_content = result.content;
+            } else {
+                console.warn('Full content extraction failed or too short');
+                article.full_content = article.description || article.title || '';
+            }
+        } catch (err) {
+            console.error('Error fetching full article content:', err);
+            article.full_content = article.description || article.title || '';
+        }
+    }
+
+    const rawText = article.full_content || article.content || article.description || article.title || '';
 
     if (!rawText.trim()) {
         alert(t.noText);
@@ -460,10 +541,8 @@ async function listenToSummary(index, autoPlay = true) {
         const result = await ttsRes.json();
 
         if (result.audio_url) {
-            // Cache the audio URL for faster future access
             audioCache.set(cacheKey, result.audio_url);
 
-            // Limit cache size to prevent memory issues
             if (audioCache.size > 20) {
                 const firstKey = audioCache.keys().next().value;
                 audioCache.delete(firstKey);
@@ -594,4 +673,127 @@ function highlightCurrentArticle(index) {
         currentCard.style.transform = 'scale(1.02)';
         currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+}
+// Load comments for one article - FIXED VERSION
+function loadComments(articleId, container) {
+    fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
+        .then(response => response.json())
+        .then(data => {
+            const commentsList = container.querySelector('.comments-list');
+            commentsList.innerHTML = '';
+
+            if (data.comments && data.comments.length === 0) {
+                commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">No comments yet. Be the first to comment!</p>';
+            } else if (data.comments) {
+                data.comments.forEach(comment => {
+                    const commentEl = document.createElement('div');
+                    commentEl.className = 'comment text-start mb-2 px-2';
+                    
+                    // Handle timestamp properly
+                    let formattedDate = 'Just now';
+                    if (comment.timestamp) {
+                        try {
+                            // Handle Firestore timestamp format
+                            const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
+                            formattedDate = date.toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        } catch (e) {
+                            console.warn('Error parsing timestamp:', e);
+                        }
+                    }
+                    
+                    commentEl.innerHTML = `
+                        <span class="fw-bold me-1 comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname || 'Anonymous')}:</span>
+                        <span class="comment-text text-dark" style="font-size: 0.8em;">${escapeHtml(comment.comment)}</span>
+                        <br><small class="text-muted" style="font-size: 0.7em;">${formattedDate}</small>
+                    `;
+                    commentsList.appendChild(commentEl);
+                });
+            }
+        })
+        .catch(err => {
+            console.error('Error loading comments:', err);
+            const commentsList = container.querySelector('.comments-list');
+            commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Error loading comments.</p>';
+        });
+}
+// Helper function to escape HTML and prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+// news.js
+
+// ... (other functions like loadComments, etc. before this)
+
+/// Setup comment form submit - IMPROVED VERSION (without success message)
+function setupCommentForms() {
+    document.querySelectorAll('.article-comments').forEach(container => {
+        const articleId = container.dataset.articleId;
+        const form = container.querySelector('.comment-form');
+
+        // Load comments on page load
+        loadComments(articleId, container);
+
+        // Remove any existing event listeners to prevent duplicates
+        // This is a common pattern when you re-render or dynamically add elements
+        // and want to ensure listeners are clean.
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        
+        // Add event listener to the new form
+        newForm.addEventListener('submit', e => {
+            e.preventDefault(); // Prevent default form submission
+
+            const nickname = newForm.nickname.value.trim();
+            const commentText = newForm.comment.value.trim();
+            const submitBtn = newForm.querySelector('button[type="submit"]');
+
+            if (!commentText) {
+                alert('Please enter a comment before posting.');
+                return;
+            }
+
+            // Disable submit button to prevent double submission and provide feedback
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Posting...';
+
+            fetch('/api/article-comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    article_id: articleId,
+                    nickname: nickname || 'Anonymous', // Use 'Anonymous' if nickname is empty
+                    comment_text: commentText
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    // If the API returns an error message, throw it
+                    throw new Error(data.error);
+                }
+                newForm.reset(); // Clear the form fields after successful post
+                loadComments(articleId, container); // Reload comments to show the new one
+                
+                // --- REMOVED SUCCESS MESSAGE LOGIC HERE ---
+                // No need for explicit success message as comments list reloads.
+            })
+            .catch(err => {
+                console.error('Error posting comment:', err);
+                // Provide alert for error feedback
+                alert('Error posting comment. Please try again.');
+            })
+            .finally(() => {
+                // Always re-enable submit button and restore its text
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Post';
+            });
+        });
+    });
 }

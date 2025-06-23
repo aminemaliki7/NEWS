@@ -103,52 +103,69 @@
 
     </main>
 
-    <template id="newsArticleTemplate">
-      <article class="news-article col-12 col-md-6 col-lg-4 mb-3 d-flex">
-        <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
+<template id="newsArticleTemplate">
+  <article class="news-article col-12 col-md-6 col-lg-4 mb-3 d-flex">
+    <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
 
-          <div class="audio-loading text-muted small d-none text-center" style="width: 100%;">
-            <div class="progress mt-2" style="height: 4px;">
-              <div class="progress-bar progress-bar-striped progress-bar-animated bg-dark" style="width: 100%;"></div>
-            </div>
-          </div>
-
-          <h5 class="article-title mb-1" style="min-height: 2.8em; font-size: 1rem; font-weight: 600; line-height: 1.3;"></h5>
-
-          <p class="article-source small text-muted mb-1">
-            <span class="source-name"></span> • <span class="publish-date"></span>
-          </p>
-
-          <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 120px; object-fit: cover; width: 100%;" />
-
-          <p class="article-description flex-grow-1 mb-2" style="font-size: 0.9em; min-height: 5em; line-height: 1.4;"></p>
-
-          <p class="text-muted small mb-1">🎧 Listen in your preferred language</p>
-
-          <div class="article-actions d-flex flex-column align-items-center gap-2 mt-auto pt-2">
-
-            <select class="form-select form-select-sm voice-select text-center w-100" style="min-width: 140px; font-size: 0.85em;">
-              <option value="en-CA-LiamNeural">🇬🇧 English</option>
-              <option value="ar-MA-JamalNeural">🇲🇦 Arabic</option>
-              <option value="fr-FR-HenriNeural">🇫🇷 French</option>
-              <option value="de-DE-ConradNeural">🇩🇪 German</option>
-              <option value="es-ES-AlvaroNeural">🇪🇸 Spanish</option>
-              <option value="pt-BR-AntonioNeural">🇧🇷 Portuguese</option>
-            </select>
-
-            <div class="d-flex justify-content-center gap-3 align-items-center w-100">
-              <a href="#" target="_blank" class="btn btn-outline-dark w-50 article-read-btn" title="Read article">Full article</a>
-              <button class="btn btn-dark w-50 article-listen-btn" data-index="" title="Play voice summary">▶︎</button>
-            </div>
-
-            <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
-
-          </div>
-
+      <div class="audio-loading text-muted small d-none text-center" style="width: 100%;">
+        <div class="progress mt-2" style="height: 4px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-dark" style="width: 100%;"></div>
         </div>
-      </article>
-    </template>
+      </div>
 
+      <h5 class="article-title mb-1" style="min-height: 2.8em; font-size: 1rem; font-weight: 600; line-height: 1.3;"></h5>
+
+      <p class="article-source small text-muted mb-1">
+        <span class="source-name"></span> • <span class="publish-date"></span>
+      </p>
+
+      <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 120px; object-fit: cover; width: 100%;" />
+
+      <p class="article-description flex-grow-1 mb-2" style="font-size: 0.9em; min-height: 5em; line-height: 1.4;"></p>
+
+      <p class="text-muted small mb-1">🎧 Listen in your preferred language</p>
+
+      <div class="article-actions d-flex flex-column align-items-center gap-2 mt-auto pt-2">
+
+        <select class="form-select form-select-sm voice-select text-center w-100" style="min-width: 140px; font-size: 0.85em;">
+          <option value="en-CA-LiamNeural">🇬🇧 English</option>
+          <option value="ar-MA-JamalNeural">🇲🇦 Arabic</option>
+          <option value="fr-FR-HenriNeural">🇫🇷 French</option>
+          <option value="de-DE-ConradNeural">🇩🇪 German</option>
+          <option value="es-ES-AlvaroNeural">🇪🇸 Spanish</option>
+          <option value="pt-BR-AntonioNeural">🇧🇷 Portuguese</option>
+        </select>
+
+        <div class="d-flex justify-content-center gap-3 align-items-center w-100">
+          <a href="#" target="_blank" class="btn btn-outline-dark w-50 article-read-btn" title="Read article">Full article</a>
+          <button class="btn btn-dark w-50 article-listen-btn" data-index="" title="Play voice summary">▶︎</button>
+        </div>
+
+        <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
+
+        <!-- Replace the article-comments section in your template with this: -->
+<div class="article-comments w-100 mt-3" data-article-id="ARTICLE_ID">
+  <div class="comments-list-container border-top border-bottom py-2 mb-3 bg-light" style="max-height: 160px; overflow-y: auto;">
+    <div class="comments-list">
+      <!-- Comments will be loaded here dynamically -->
+      <p class="text-muted text-center py-3" style="font-size: 0.8em;">Loading comments...</p>
+    </div>
+  </div>
+
+  <form class="comment-form w-100 d-flex align-items-center gap-2">
+    <input type="text" name="nickname" placeholder="Your name (optional)" class="form-control form-control-sm flex-grow-1" style="font-size: 0.85em;" maxlength="50" />
+    <textarea name="comment" placeholder="Add a comment..." rows="1" class="form-control form-control-sm border-0 flex-grow-1" style="resize: none; background-color: transparent; font-size: 0.85em;" maxlength="500" required></textarea>
+    <button type="submit" class="btn btn-link btn-sm text-decoration-none text-primary fw-bold p-0" style="white-space: nowrap; font-size: 0.8em;">Post</button>
+  </form>
+</div>
+
+          
+        </div>
+        </div>
+
+    </div>
+  </article>
+</template>
     <footer class="journal-footer text-center py-4 mt-5">
       <hr class="footer-separator">
       <p class="text-muted">Create voice content with advanced AI technology.</p>
@@ -156,6 +173,82 @@
     </footer>
 
   </div>
+<!-- Newsletter Modal -->
+<!-- Newsletter Modal -->
+<div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="newsletterForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="newsletterModalLabel">Subscribe to our Newsletter</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="newsletterEmail" class="form-label">Your Email:</label>
+            <input type="email" class="form-control" id="newsletterEmail" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Select topics you are interested in:</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="World News" id="catWorld">
+              <label class="form-check-label" for="catWorld">🌍 World News</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Business & Finance" id="catBusiness">
+              <label class="form-check-label" for="catBusiness">💰 Business & Finance</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Technology & AI" id="catAI">
+              <label class="form-check-label" for="catAI">🤖 Technology & AI</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Crypto & Blockchain" id="catCrypto">
+              <label class="form-check-label" for="catCrypto">🪙 Crypto & Blockchain</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Sports" id="catSports">
+              <label class="form-check-label" for="catSports">🏀 Sports</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Entertainment" id="catEntertainment">
+              <label class="form-check-label" for="catEntertainment">🎬 Entertainment</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Health & Wellness" id="catHealth">
+              <label class="form-check-label" for="catHealth">🏥 Health & Wellness</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Science & Space" id="catScience">
+              <label class="form-check-label" for="catScience">🚀 Science & Space</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Lifestyle & Travel" id="catLifestyle">
+              <label class="form-check-label" for="catLifestyle">✈️ Lifestyle & Travel</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Politics" id="catPolitics">
+              <label class="form-check-label" for="catPolitics">🗳️ Politics</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Opinion & Analysis" id="catOpinion">
+              <label class="form-check-label" for="catOpinion">🧐 Opinion & Analysis</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="Breaking News" id="catBreaking">
+              <label class="form-check-label" for="catBreaking">⚡ Breaking News</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-dark">Subscribe</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/news.js') }}"></script>

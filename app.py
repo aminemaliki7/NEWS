@@ -3,33 +3,112 @@ import asyncio
 import tempfile
 import time
 import json
+import threading
+import uuid
 from flask import Flask, request, render_template, redirect, url_for, send_file, jsonify, session
 from werkzeug.utils import secure_filename
-import threading
 from datetime import datetime
-from flask import send_file
-from news_summary import  generate_voice_optimized_text
+from news_summary import generate_voice_optimized_text
 from youtube_news_generator import generate_youtube_news_script
-
 import google.generativeai as genai
-from flask import request, jsonify
-from dotenv import load_dotenv
-
-# Import from our modules
 from tts import generate_simple_tts
 from gnews_client import GNewsClient
+from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-# Import the downloader modules at the top of your app.py file
-import uuid
+
 
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = "simple_tts_generator"  # for session management
 
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred)
+
+db = firestore.client() 
 
 gnews_client = GNewsClient() 
+COMMENTS = {}
+
 
 load_dotenv()
+
+firebase_config = {
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+    "appId": os.getenv("FIREBASE_APP_ID"),
+    "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
+    "databaseURL": ""  # Not needed now unless you use Realtime DB
+}
+
+
+# REMOVE THESE DUPLICATE LINES:
+# cred = credentials.Certificate('serviceAccountKey.json')  # You need to download serviceAccountKey.json from Firebase settings
+# firebase_admin.initialize_app(cred)
+
+# API — Subscribe Newsletter
+@app.route('/api/article-comment', methods=['POST'])
+def post_comment():
+    data = request.json
+    article_id = data.get('article_id')
+    comment_text = data.get('comment_text', '').strip()
+    nickname = data.get('nickname', 'Anonymous')
+
+    if not article_id or not comment_text:
+        return jsonify({"error": "Missing article_id or comment_text"}), 400
+
+    try:
+        # Each article will be a collection
+        doc_ref = db.collection('comments').document(article_id).collection('comments').document()
+
+        doc_ref.set({
+            'nickname': nickname,
+            'comment': comment_text,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+
+        return jsonify({"message": "Comment posted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API — Article Comment
+@app.route('/api/article-comments', methods=['GET'])
+def get_comments():
+    article_id = request.args.get('article_id')
+    if not article_id:
+        return jsonify({"error": "Missing article_id"}), 400
+
+    try:
+        comments_ref = db.collection('comments').document(article_id).collection('comments')
+        comments_snapshot = comments_ref.order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+
+        comments = []
+        for doc in comments_snapshot:
+            comment = doc.to_dict()
+            comment['id'] = doc.id
+            comments.append(comment)
+
+        return jsonify({"comments": comments})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+# 404 / 500 handlers
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('error.html', message="Page not found."), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('error.html', message="Internal server error."), 500
+
 
 def setup_gemini_api(api_key):
     genai.configure(api_key=api_key)
@@ -318,12 +397,6 @@ def shorts_generator():
     return render_template('shorts_generator.html', voices=AVAILABLE_VOICES, languages=AVAILABLE_LANGUAGES)
 
 
-
-
-
-
-
-
 # Add a conversion option to send downloaded audio to voice generator
 @app.route('/convert-to-voice/<download_id>')
 def convert_to_voice(download_id):
@@ -339,10 +412,6 @@ def convert_to_voice(download_id):
     # Redirect to the main voice generator page with a parameter
     # to indicate we want to use this audio file
     return redirect(url_for('index', audio_source=download_id))
-
-
-
-    
 
 @app.route('/news')
 def news_page():
@@ -405,8 +474,25 @@ def get_article_content():
             "url": url
         }), 200  # Return 200 to handle the error on the client side
 
+@app.route('/api/newsletter-subscribe', methods=['POST'])
+def newsletter_subscribe():
+    data = request.get_json()
+    email = data.get('email', '').strip().lower()
+    categories = data.get('categories', [])
 
+    if not email or '@' not in email:
+        return jsonify({'error': 'Invalid email address.'}), 400
 
+    try:
+        db.collection('newsletter_subscribers').add({
+            'email': email,
+            'categories': categories,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({'message': 'Subscription successful!'})
+    except Exception as e:
+        print(f'Error saving newsletter subscription: {e}')
+        return jsonify({'error': 'Failed to save subscription.'}), 500
 
 
 @app.route('/api/news/voice-optimize', methods=['POST'])
@@ -418,8 +504,20 @@ def optimize_article_for_voice():
 
     try:
         content = data.get('content', '')
-        optimized_content = generate_voice_optimized_text(content, word_limit=40000)
-
+        
+        # Debug: Log the input content length
+        app.logger.info(f"Input content length: {len(content)} characters")
+        
+        # Make sure we don't pass an artificial word limit that might cause truncation  
+        optimized_content = generate_voice_optimized_text(content, include_intro=True, include_outro=True)
+        
+        # Debug: Log the output content length
+        app.logger.info(f"Output content length: {len(optimized_content)} characters")
+        
+        # Ensure the response doesn't get truncated by checking if it ends properly
+        if optimized_content and not optimized_content.rstrip().endswith(('.', '!', '?', 'more.')):
+            app.logger.warning("Optimized content may have been truncated - doesn't end with proper punctuation")
+        
         return jsonify({
             "optimized_content": optimized_content
         })
@@ -468,7 +566,6 @@ def generate_news_youtube_script_route():
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -603,7 +700,6 @@ def test_gnews_keys():
 
 
     
-
 
 # Call cleanup periodically (you can set this up with a scheduler)
 # cleanup_old_files()
