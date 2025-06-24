@@ -4,37 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- SEO Meta -->
   <meta name="description" content="REALTalk — The Digital Journal You Can Listen To. Stay updated with world, business, technology, and science news, with audio narration." />
   <link rel="canonical" href="https://newsnap.space/" />
 
-  <!-- Open Graph (Facebook, LinkedIn, etc.) -->
   <meta property="og:title" content="REALTalk — The Digital Journal You Can Listen To" />
   <meta property="og:description" content="Listen to world, business, and tech news on REALTalk. Read, listen, and stay updated." />
   <meta property="og:image" content="https://newsnap.space/static/images/og-image.jpg" />
   <meta property="og:url" content="https://newsnap.space/" />
 
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="REALTalk — The Digital Journal You Can Listen To" />
   <meta name="twitter:description" content="Listen to the latest world, business, and tech news with REALTalk." />
   <meta name="twitter:image" content="https://newsnap.space/static/images/og-image.jpg" />
 
-  <!-- Page Title -->
   <title>REALTalk — The Digital Journal You Can Listen To</title>
 
-  <!-- Stylesheets -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/news.css') }}" />
 
-  <!-- Favicon -->
   <link rel="icon" href="/static/images/favicon.png" type="image/x-icon">
 
-  <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1955463530202020"
-     crossorigin="anonymous"></script>
+      crossorigin="anonymous"></script>
 
-  <!-- Inline Styles -->
   <style>
     .journal-page-wrapper {
       max-width: 100%;
@@ -43,6 +35,43 @@
     .article-listen-btn:disabled {
       opacity: 0.6;
       pointer-events: none;
+    }
+    /*
+    This class is added by news.js to the last article's root element.
+    It ensures the article's card content properly stretches when the articleRoot
+    has 'col-12' and no other specific column constraints.
+    */
+    .full-width-article .card {
+        width: 100%; /* Ensure the card inside takes full width of its 'col-12' parent */
+        margin: auto; /* Center the card if its content is narrower than 100% */
+        max-width: 800px; /* Optional: Limit max width for readability on very large screens */
+    }
+
+    /* Optional: Further adjustments for centering content within the full-width card */
+    .full-width-article .article-image {
+        max-height: 250px; /* Make the image a bit larger for the full-width article */
+        object-fit: contain; /* Adjust to 'contain' to avoid cropping, or 'cover' if you prefer */
+        width: auto; /* Allow image to size naturally within its container */
+        margin: 0 auto; /* Center the image */
+    }
+    .full-width-article .article-description {
+        text-align: left; /* Align text left for better readability in wide articles */
+        max-width: 700px; /* Limit text width for readability */
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .full-width-article .article-title {
+        text-align: center;
+    }
+    .full-width-article .article-read-btn {
+      width: fit-content !important; /* Make button fit content */
+      margin: 0 auto; /* Center the button */
+    }
+    .full-width-article .voice-select {
+        margin: 0 auto;
+    }
+    .full-width-article .article-actions {
+        align-items: center; /* Re-center action buttons/select */
     }
   </style>
 </head>
@@ -83,31 +112,29 @@
       </nav>
 
       <section class="filter-toolbar mb-4">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-5 col-12">
-            <label for="searchQuery" class="form-label visually-hidden">Search</label>
-            <input id="searchQuery" type="text" class="form-control" placeholder="Search keywords..." />
-          </div>
-          <div class="col-md-5 col-12">
-            <label for="category" class="form-label visually-hidden">Category</label>
-            <select id="category" class="form-select">
-              <option value="general">General</option>
-              <option value="world">World</option>
-              <option value="nation">Nation</option>
-              <option value="business">Business</option>
-              <option value="technology">Technology</option>
-              <option value="entertainment">Entertainment</option>
-              <option value="sports">Sports</option>
-              <option value="science">Science</option>
-              <option value="health">Health</option>
-            </select>
-          </div>
-          <div class="col-md-2 col-12">
-            <button id="searchBtn" class="btn btn-dark w-100">Apply Filters</button>
-          </div>
-        </div>
-        <hr class="section-separator mt-4">
-      </section>
+  <div class="row g-2 align-items-end">
+    <div class="col-md-10 col-12"> <label for="searchQuery" class="form-label visually-hidden">Search</label>
+      <input id="searchQuery" type="text" class="form-control" placeholder="Search keywords..." />
+    </div>
+    <div class="col-md-5 col-12 d-md-none"> <label for="category" class="form-label visually-hidden">Category</label>
+      <select id="category" class="form-select">
+        <option value="general">General</option>
+        <option value="world">World</option>
+        <option value="nation">Nation</option>
+        <option value="business">Business</option>
+        <option value="technology">Technology</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="sports">Sports</option>
+        <option value="science">Science</option>
+        <option value="health">Health</option>
+      </select>
+    </div>
+    <div class="col-md-2 col-12">
+      <button id="searchBtn" class="btn btn-dark w-100">Apply Filters</button>
+    </div>
+  </div>
+  <hr class="section-separator mt-4">
+</section>
 
       <section class="status-messages text-center my-5">
         <div id="loadingIndicator" class="d-none">
@@ -124,22 +151,10 @@
         </div>
       </section>
 
+      {# This section will be populated dynamically by news.js #}
       <section id="newsList" class="news-grid row">
-  {% for article in articles %}
-    <article class="news-article col-12 col-md-6 col-lg-4 mb-3 d-flex">
-      <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
-        <h5 class="article-title mb-1">{{ article.title }}</h5>
-        <p class="article-source small text-muted mb-1">{{ article.source.name }} • {{ article.publishedAt }}</p>
-{% if article.image %}
-  <img src="{{ article.image }}" alt="{{ article.title }}" class="article-image img-fluid mb-2" />
-{% endif %}
-        <p class="article-description flex-grow-1 mb-2">{{ article.description }}</p>
-        <a href="{{ article.url }}" target="_blank" class="btn btn-outline-dark w-50">Full article</a>
-      </div>
-    </article>
-  {% endfor %}
-</section>
-
+        {# Articles will be appended here by JavaScript #}
+      </section>
 
       <div class="text-center my-4">
         <a href="#top" class="back-to-top-link text-decoration-none text-dark">Back to Top &uarr;</a>
@@ -147,38 +162,36 @@
 
     </main>
 
+{# newsArticleTemplate: This template defines the structure for each news article. #}
 <template id="newsArticleTemplate">
-  <article class="news-article col-12 col-md-6 col-lg-4 mb-3 d-flex">
+  {#
+    IMPORTANT: The <article> tag here should NOT have Bootstrap column classes
+    like col-12, col-md-6, col-lg-4 directly. These will be added dynamically
+    by news.js based on whether it's the last article or a regular one.
+  #}
+  <article class="news-article"> {# Classes like col-12, mb-3, d-flex will be added by JS #}
     <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
 
-      <!-- Audio loading -->
       <div class="audio-loading text-muted small d-none text-center" style="width: 100%;">
         <div class="progress mt-2" style="height: 4px;">
           <div class="progress-bar progress-bar-striped progress-bar-animated bg-dark" style="width: 100%;"></div>
         </div>
       </div>
 
-      <!-- Article Title -->
       <h5 class="article-title mb-1" style="min-height: 2.8em; font-size: 1rem; font-weight: 600; line-height: 1.3;">Article Title</h5>
 
-      <!-- Source and Date -->
       <p class="article-source small text-muted mb-1">
         <span class="source-name">Source Name</span> • <span class="publish-date">Date</span>
       </p>
 
-      <!-- Article Image -->
       <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 120px; object-fit: cover; width: 100%;" />
 
-      <!-- Description -->
       <p class="article-description flex-grow-1 mb-2" style="font-size: 0.9em; min-height: 5em; line-height: 1.4;">Article description goes here...</p>
 
-      <!-- Listen label -->
       <p class="text-muted small mb-1">🎧 Listen in your preferred language</p>
 
-      <!-- Actions -->
       <div class="article-actions d-flex flex-column align-items-center gap-2 mt-auto pt-2">
 
-        <!-- Voice select -->
         <select class="form-select form-select-sm voice-select text-center w-100" style="min-width: 140px; font-size: 0.85em;">
           <option value="en-CA-LiamNeural">🇬🇧 English</option>
           <option value="ar-MA-JamalNeural">🇲🇦 Arabic</option>
@@ -188,16 +201,13 @@
           <option value="pt-BR-AntonioNeural">🇧🇷 Portuguese</option>
         </select>
 
-        <!-- Play + Read -->
         <div class="d-flex justify-content-center gap-3 align-items-center w-100">
           <a href="#" target="_blank" class="btn btn-outline-dark w-50 article-read-btn" title="Read article">Full article</a>
           <button class="btn btn-dark w-50 article-listen-btn" data-index="" title="Play voice summary">▶︎</button>
         </div>
 
-        <!-- Progress bar -->
         <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
 
-        <!-- Comments -->
         <div class="article-comments w-100 mt-3" data-article-id="ARTICLE_ID">
           <div class="comments-list-container border-top border-bottom py-2 mb-3 bg-light" style="max-height: 160px; overflow-y: auto;">
             <div class="comments-list">
@@ -212,9 +222,7 @@
           </form>
         </div>
 
-      </div> <!-- End actions -->
-
-    </div>
+      </div> </div>
   </article>
 </template>
 
@@ -230,8 +238,6 @@
 
 
   </div>
-<!-- Newsletter Modal -->
-<!-- Newsletter Modal -->
 <div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -306,8 +312,53 @@
   </div>
 </div>
 
+<!-- Chat Button -->
+<div id="chatButton">💬</div>
+
+<!-- Chat Box -->
+<div id="chatBox">
+    <!-- Chat Header -->
+    <div>💬 Questions, feedback, ideas? We're listening!</div>
+
+
+    <!-- Chat Messages -->
+    <div id="chatMessages">
+        <div class="chat-message bot-message">
+            <p>Hello! How can we help today?</p>
+        </div>
+    </div>
+
+    <!-- Chat Footer -->
+    <div>
+        <button class="chat-question" data-reply="REALTalk is a search engine for trustworthy news — we try to filter only credible sources, in a world full of fake news.">
+            What is REALTalk?
+        </button>
+
+        <button class="chat-question" data-reply="Our news sources are selected for their reliability and credibility. We update regularly to keep the content fresh.">
+            Where do your news sources come from?
+        </button>
+
+        <button class="chat-question" data-reply="Yes — comments are public so you can interact with other readers interested in the same article.">
+            Can I interact with other readers?
+        </button>
+
+        <button class="chat-question" data-reply="We’re an early-stage project — your feedback is the best support! Let us know what you’d like to see added.">
+            How can I support the project?
+        </button>
+
+        <!-- Feedback box (hidden by default) -->
+        <div id="feedbackBox" style="display: none; flex-direction: column; gap: 6px; width: 100%; margin-top: 8px;">
+            <input id="feedbackInput" type="text" placeholder="I wish the app had..." 
+                style="padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 0.9em; width: 100%;">
+            <button id="feedbackSubmit" style="padding: 8px 12px; background: #000; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; width: 100%;">
+                Send feedback
+            </button>
+        </div>
+    </div>
+</div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/news.js') }}"></script>
+  
 </body>
 </html>

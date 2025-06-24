@@ -16,11 +16,14 @@ class GNewsClient:
             os.getenv('GNEWS_API_KEY_2'),
             os.getenv('GNEWS_API_KEY_3'),
             os.getenv('GNEWS_API_KEY_4'),
-            os.getenv('GNEWS_API_KEY_5')
+            os.getenv('GNEWS_API_KEY_5'),
+            os.getenv('GNEWS_API_KEY_6'),
+            os.getenv('GNEWS_API_KEY_7'),
+            os.getenv('GNEWS_API_KEY_8')
         ]
         
         if not any(self.api_keys):
-            raise ValueError("No GNEWS_API_KEY_X set in .env")
+            raise ValueError("No GNEWS_API_KEY_X set in .env") # This is a dev-facing error, acceptable.
         
         self.api_index = 0
         self.base_url = "https://gnews.io/api/v4"
@@ -57,22 +60,25 @@ class GNewsClient:
                 return response.json()
             
             except requests.exceptions.HTTPError as e:
-                print(f"[GNews] API key {self.api_index + 1} failed: {e}")
+                print(f"[GNews] API key {self.api_index + 1} failed: {e}") # Internal log
                 
                 if response.status_code in [401, 403, 429]:
-                    # Rotate to next key
+                    # Rotate to next key for these specific API errors
                     self.api_index = (self.api_index + 1) % MAX_RETRIES
                     continue
                 else:
+                    # For other HTTP errors, break and return generic failure
                     break
             
             except requests.exceptions.RequestException as e:
-                print(f"[GNews] Request error: {e}")
+                print(f"[GNews] Request error: {e}") # Internal log
+                # For network/request errors, break and return generic failure
                 break
         
+        # If all retries fail or an unrecoverable error occurs
         return {
             "articles": [],
-            "error": "Unable to load articles at the moment."
+            "error": "Unable to load articles at the moment." # Generic message
         }
     
     def search_news(self, query, language="en", country="us", max_results=10, from_date=None, to_date=None):
@@ -95,7 +101,7 @@ class GNewsClient:
         for attempt in range(MAX_RETRIES):
             current_token = self.api_keys[self.api_index]
             if not current_token:
-                print(f"[GNews] Skipping empty key at index {self.api_index + 1}")
+                print(f"[GNews] Skipping empty key at index {self.api_index + 1}") # Internal log
                 self.api_index = (self.api_index + 1) % MAX_RETRIES
                 continue
             
@@ -107,7 +113,7 @@ class GNewsClient:
                 return response.json()
             
             except requests.exceptions.HTTPError as e:
-                print(f"[GNews] API key {self.api_index + 1} failed: {e}")
+                print(f"[GNews] API key {self.api_index + 1} failed: {e}") # Internal log
                 
                 if response.status_code in [401, 403, 429]:
                     self.api_index = (self.api_index + 1) % MAX_RETRIES
@@ -116,12 +122,12 @@ class GNewsClient:
                     break
             
             except requests.exceptions.RequestException as e:
-                print(f"[GNews] Request error: {e}")
+                print(f"[GNews] Request error: {e}") # Internal log
                 break
         
         return {
             "articles": [],
-            "error": "Unable to load articles at the moment."
+            "error": "Unable to load articles at the moment." # Generic message
         }
     
     def fetch_article_content(self, url):
@@ -138,6 +144,7 @@ class GNewsClient:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
+            # Print statements for internal debugging, not user-facing
             print(f"Response status: {response.status_code}")
             print(f"Response headers: {response.headers}")
             
@@ -178,12 +185,12 @@ class GNewsClient:
             }
         
         except Exception as e:
-            print(f"[GNews] Error extracting article content: {e}")
+            print(f"[GNews] Error extracting article content: {e}") # Internal log
             return {
                 "title": "Content Extraction Failed",
                 "content": "Unable to extract content from this article.",
                 "url": url,
-                "error": "Content extraction failed"
+                "error": "Content extraction failed. Please try again." # Generic message
             }
     
     def _extract_content_with_multiple_strategies(self, soup):
@@ -214,7 +221,7 @@ class GNewsClient:
                             if len(content) > 200:
                                 return content
             except Exception as e:
-                print(f"Error in selector {selector}: {e}")
+                print(f"Error in selector {selector}: {e}") # Internal log
                 continue
         
         paragraphs_by_parent = {}
@@ -248,7 +255,7 @@ class GNewsClient:
             return json_data['article']['title']
         return "Article Title"
 
-# Example usage
+# Example usage (for testing, not part of the deployed app)
 if __name__ == "__main__":
     client = GNewsClient()
     news = client.get_top_headlines(category="technology", language="en", max_results=5)
@@ -261,3 +268,4 @@ if __name__ == "__main__":
             print("---")
     else:
         print("Error fetching news")
+        print(news.get("error", "Unknown error"))

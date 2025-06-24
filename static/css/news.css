@@ -722,3 +722,235 @@ h1.h3 {
     background-color: var(--audio-progress-value-bg);
     border-radius: 3px;
 }
+/* Existing website specific styles */
+        .journal-page-wrapper {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        .article-listen-btn:disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        /*
+        This class is added by news.js to the last article's root element.
+        It ensures the article's card content properly stretches when the articleRoot
+        has 'col-12' and no other specific column constraints.
+        */
+        .full-width-article .card {
+            width: 100%; /* Ensure the card inside takes full width of its 'col-12' parent */
+            margin: auto; /* Center the card if its content is narrower than 100% */
+            max-width: 800px; /* Optional: Limit max width for readability on very large screens */
+        }
+
+        /* Optional: Further adjustments for centering content within the full-width card */
+        .full-width-article .article-image {
+            max-height: 250px; /* Make the image a bit larger for the full-width article */
+            object-fit: contain; /* Adjust to 'contain' to avoid cropping, or 'cover' if you prefer */
+            width: auto; /* Allow image to size naturally within its container */
+            margin: 0 auto; /* Center the image */
+        }
+        .full-width-article .article-description {
+            text-align: left; /* Align text left for better readability in wide articles */
+            max-width: 700px; /* Limit text width for readability */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .full-width-article .article-title {
+            text-align: center;
+        }
+        .full-width-article .article-read-btn {
+            width: fit-content !important; /* Make button fit content */
+            margin: 0 auto; /* Center the button */
+        }
+        .full-width-article .voice-select {
+            margin: 0 auto;
+        }
+        .full-width-article .article-actions {
+            align-items: center; /* Re-center action buttons/select */
+        }
+
+        /* --- Chatbot Specific Styles (minimalistic design) --- */
+
+      /* --- Chatbot Specific Styles (minimalistic design) --- */
+
+/* Chat Button */
+#chatButton {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #000;
+    color: #fff;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    text-align: center;
+    line-height: 60px;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Slightly softer shadow */
+    transition: transform 0.2s ease-in-out; /* Smooth hover effect */
+}
+
+#chatButton:hover {
+    transform: scale(1.05); /* Slightly enlarge on hover */
+}
+
+/* Chat Box Container */
+#chatBox {
+    display: none;
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 320px; /* Default width for desktop */
+    background: #fff;
+    border: 1px solid #eee; /* Lighter border for a softer look */
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08); /* More subtle shadow */
+    z-index: 999;
+    font-family: Arial, sans-serif;
+}
+
+/* Chat Box Header */
+#chatBox > div:first-child { /* The header has no class, so target by first-child */
+    padding: 12px 10px; /* Adjusted horizontal padding from 15px to 10px */
+    border-bottom: 1px solid #f0f0f0; /* Lighter separator */
+    font-weight: 600; /* Slightly bolder for prominence */
+    color: #333; /* Darker text for readability */
+    background-color: #fcfcfc; /* Very subtle background */
+    border-radius: 10px 10px 0 0; /* Match parent border-radius */
+}
+
+/* Chat Messages Area */
+#chatMessages {
+    padding: 15px; /* Increased padding */
+    max-height: 250px; /* Slightly more height for messages */
+    overflow-y: auto;
+    font-size: 0.95em; /* Slightly larger font */
+    color: #555; /* Softer text color */
+    line-height: 1.5; /* Better readability */
+    display: flex; /* Use flexbox for message layout */
+    flex-direction: column; /* Stack messages vertically */
+}
+
+/* General chat message styling */
+.chat-message {
+    margin-bottom: 10px; /* Space between messages */
+    padding: 8px 12px;
+    border-radius: 15px;
+    max-width: 80%; /* Messages don't take full width */
+    word-wrap: break-word; /* Ensure long words wrap */
+}
+
+.chat-message p {
+    margin: 0; /* Remove default paragraph margins inside messages */
+}
+
+/* Styling for messages sent by the user */
+.user-message {
+    background-color: #e0f2fe; /* Light blue bubble */
+    color: #333;
+    align-self: flex-end; /* Align to the right */
+    border-bottom-right-radius: 5px; /* "Tail" effect */
+}
+
+/* Styling for messages from the bot */
+.bot-message {
+    background-color: #f1f1f1; /* Light grey bubble */
+    color: #333;
+    align-self: flex-start; /* Align to the left */
+    border-bottom-left-radius: 5px; /* "Tail" effect */
+}
+
+
+/* Chat Footer (where buttons are) */
+#chatBox > div:last-child { /* The footer has no class, so target by last-child */
+    padding: 10px 15px 15px; /* Adjust padding for better spacing */
+    border-top: 1px solid #f0f0f0; /* Lighter separator */
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap */
+    gap: 8px; /* Space between buttons */
+    background-color: #fcfcfc; /* Consistent subtle background */
+    border-radius: 0 0 10px 10px; /* Match parent border-radius */
+}
+
+/* Chat Question Buttons */
+.chat-question {
+    background: #e9e9e9; /* Light grey background */
+    color: #333; /* Darker text */
+    border: 1px solid #e0e0e0; /* Subtle border */
+    border-radius: 20px; /* Pill-shaped buttons */
+    padding: 8px 12px; /* Comfortable padding */
+    font-size: 0.85em; /* Slightly smaller font for compactness */
+    cursor: pointer;
+    transition: all 0.2s ease-in-out; /* Smooth transitions */
+    flex-grow: 1; /* Allow buttons to grow and fill space */
+    text-align: center;
+    white-space: normal; /* CHANGED: Allow text to wrap normally */
+    max-width: calc(50% - 4px); /* Max width for two columns with gap */
+    height: auto; /* Ensure button height adjusts to content */
+    display: flex; /* Use flex to vertically center text if needed */
+    align-items: center; /* Vertically center text if it wraps */
+    justify-content: center; /* Horizontally center text */
+    line-height: 1.3; /* Adjust line height for wrapped text readability */
+}
+
+.chat-question:hover {
+    background: #dcdcdc; /* Slightly darker grey on hover */
+    border-color: #d0d0d0;
+    transform: translateY(-1px); /* Subtle lift effect */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very light shadow on hover */
+}
+
+.chat-question:active {
+    transform: translateY(0); /* Reset on click */
+    box-shadow: none;
+}
+
+/* --- Chatbot Specific Styles (Mobile Adjustments) --- */
+@media (max-width: 768px) {
+    #chatButton {
+        width: 50px; /* Smaller button */
+        height: 50px;
+        line-height: 50px;
+        font-size: 20px; /* Smaller icon */
+        bottom: 15px; /* Adjust position */
+        right: 15px;
+    }
+
+    #chatBox {
+        width: calc(100% - 30px); /* Nearly full width, with margin */
+        max-width: 300px; /* Prevent it from being too wide on slightly larger mobiles */
+        bottom: 75px; /* Adjust position above smaller button */
+        right: 15px; /* Match button right position */
+        left: unset; /* Ensure it doesn't get pushed left unexpectedly */
+    }
+
+    #chatMessages {
+        max-height: 200px; /* Slightly less height for messages */
+        font-size: 0.9em; /* Smaller font for messages */
+    }
+
+    .chat-message {
+        padding: 7px 10px; /* Slightly less padding in messages */
+        max-width: 85%; /* Can take a bit more width on mobile */
+    }
+
+    .chat-question {
+        font-size: 0.8em; /* Smaller font for buttons */
+        padding: 7px 10px; /* Smaller padding for buttons */
+        max-width: calc(50% - 4px); /* Keep two columns, adjust if single column preferred */
+    }
+
+    /* Optional: For very small screens, make buttons single column */
+    /* Uncomment if you find buttons too cramped on small phones */
+    /* @media (max-width: 480px) {
+        #chatBox > div:last-child {
+            flex-direction: column;
+            gap: 6px;
+        }
+        .chat-question {
+            max-width: 100%;
+        }
+    } */
+}

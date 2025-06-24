@@ -88,7 +88,7 @@ def post_comment():
 
         return jsonify({"message": "Comment posted", "nickname": nickname})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
 
 
 # API — Article Comment
@@ -111,7 +111,24 @@ def get_comments():
         return jsonify({"comments": comments})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
+@app.route('/api/feedback', methods=['POST'])
+def save_feedback():
+    data = request.get_json()
+    feedback = data.get('feedback', '').strip()
+
+    if not feedback:
+        return jsonify({"error": "No feedback provided"}), 400
+
+    try:
+        db.collection('feedback').add({
+            'feedback': feedback,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({"message": "Feedback saved!"})
+    except Exception as e:
+        app.logger.error(f"Error saving feedback: {e}")
+        return jsonify({"error": "Failed to save feedback."}), 500
 
 
 @app.route('/privacy-policy')
@@ -582,7 +599,7 @@ def optimize_article_for_voice():
         })
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
 @app.route('/api/news/youtube-script', methods=['POST'])
 def generate_news_youtube_script_route():
     """Generate a YouTube-style news script based on article content"""
@@ -616,15 +633,15 @@ def generate_news_youtube_script_route():
         
     except Exception as e:
         app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
         
     except Exception as e:
         app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
 
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -689,7 +706,7 @@ def summary_audio():
 
     except Exception as e:
         app.logger.error(f"TTS error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Please try again."}), 500
 
 
 # Optional: Add a cleanup function to remove old temp filesssssssssssssssssssssss

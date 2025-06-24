@@ -302,15 +302,35 @@ async function loadNews() {
 
 function displayNews(articlesData) {
     newsList.innerHTML = '';
+    const totalArticles = articlesData.length;
+
     articlesData.forEach((article, index) => {
-        const articleElement = createArticleElement(article, index);
+        // Determine if this is the last article
+        const isLastArticle = (index === totalArticles - 1);
+        const articleElement = createArticleElement(article, index, isLastArticle);
         newsList.appendChild(articleElement);
     });
 }
 
-function createArticleElement(article, index) {
+function createArticleElement(article, index, isLastArticle = false) {
     const template = newsTemplate.content.cloneNode(true);
     const t = translations.en; // Always use English translations for UI text within the article card
+
+    // Get the root <article> element from the template
+    const articleRoot = template.querySelector('.news-article');
+
+    // Dynamically apply column classes
+    if (isLastArticle) {
+        // Last article: full width on all devices (col-12)
+        articleRoot.classList.remove('col-md-6', 'col-lg-4'); // Remove original Bootstrap column classes
+        articleRoot.classList.add('col-12', 'full-width-article'); // Ensure it takes full width
+    } else {
+        // Regular articles: 3 columns on large, 2 on medium, 1 on small
+        articleRoot.classList.add('col-12', 'col-md-6', 'col-lg-4');
+    }
+    // Add margin bottom for all articles
+    articleRoot.classList.add('mb-3', 'd-flex');
+
 
     template.querySelector('.article-title').textContent = article.title || 'No Title';
     template.querySelector('.source-name').textContent = article.source?.name || t.unknownSource;
@@ -740,6 +760,9 @@ function setupCommentForms() {
         // Load comments on page load
         loadComments(articleId, container);
 
+        // This removes the old event listener by replacing the form element
+        // with a cloned one. This is a common pattern to avoid duplicate listeners
+        // when dynamically adding/repla
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         
@@ -790,3 +813,100 @@ function setupCommentForms() {
         });
     });
 }
+document.getElementById('chatButton').addEventListener('click', function() {
+    const chatBox = document.getElementById('chatBox');
+    chatBox.style.display = chatBox.style.display === 'none' ? 'block' : 'none';
+});
+
+// news.js (or wherever your main JS is)
+
+// Toggle chat open/close
+const chatButton = document.getElementById('chatButton');
+const chatBox = document.getElementById('chatBox');
+
+chatButton.addEventListener('click', function() {
+    if (chatBox.style.display === 'block') {
+        chatBox.style.display = 'none';
+    } else {
+        chatBox.style.display = 'block';
+    }
+});
+
+// Close chat when clicking outside
+document.addEventListener('click', function(event) {
+    if (!chatBox.contains(event.target) && !chatButton.contains(event.target)) {
+        chatBox.style.display = 'none';
+    }
+});
+
+// Toggle chat open/close when clicking the button
+document.getElementById('chatButton').addEventListener('click', function() {
+    const chatBox = document.getElementById('chatBox');
+    chatBox.style.display = (chatBox.style.display === 'none' || chatBox.style.display === '') ? 'block' : 'none';
+});
+
+// Close chat when clicking outside
+document.addEventListener('click', function(event) {
+    const chatBox = document.getElementById('chatBox');
+    const chatButton = document.getElementById('chatButton');
+
+    // If click is outside chat box and not the button
+    if (!chatBox.contains(event.target) && !chatButton.contains(event.target)) {
+        chatBox.style.display = 'none';
+    }
+});
+
+// Handle question clicks
+document.querySelectorAll('.chat-question').forEach(button => {
+    button.addEventListener('click', function() {
+        const reply = this.getAttribute('data-reply');
+
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('chat-message', 'bot-message');
+        msgDiv.innerHTML = `<p>${reply}</p>`;
+        document.getElementById('chatMessages').appendChild(msgDiv);
+
+        document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+
+        // Show feedback box if clicked on support project
+        if (reply.toLowerCase().includes('feedback')) {
+            document.getElementById('feedbackBox').style.display = 'flex';
+        }
+    });
+});
+
+// Handle feedback submit
+document.getElementById('feedbackSubmit').addEventListener('click', function() {
+    const feedback = document.getElementById('feedbackInput').value.trim();
+    if (feedback) {
+        fetch('/api/feedback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ feedback: feedback })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('chat-message', 'bot-message');
+
+            if (data.message) {
+                msgDiv.innerHTML = `<p>✅ Thanks for your feedback!</p>`;
+            } else {
+                msgDiv.innerHTML = `<p>❌ Failed to send feedback. Please try again later.</p>`;
+            }
+
+            document.getElementById('chatMessages').appendChild(msgDiv);
+
+            // Reset input & hide feedback box
+            document.getElementById('feedbackInput').value = "";
+            document.getElementById('feedbackBox').style.display = 'none';
+
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+        })
+        .catch(err => {
+            console.error('Error submitting feedback:', err);
+        });
+    }
+});
