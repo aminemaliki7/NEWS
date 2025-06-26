@@ -16,3 +16,4 @@ html5lib
 nltk
 aiofiles
 asyncio
+redis

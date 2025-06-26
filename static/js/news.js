@@ -452,12 +452,9 @@ async function listenToSummary(index, autoPlay = true) {
 
     if (!article || !selectedVoice || !listenBtn) return;
 
-    // Stop any other playing audio first (only one at a time)
-    if (activeAudio && currentArticleIndex !== index) {
-        stopActiveAudio();
-    }
+    const cacheKey = `${index}-${selectedVoice}`;
 
-    // Handle play/pause for same article
+    // ✅ Handle pause/play toggle if same article
     if (activeAudio && currentArticleIndex === index) {
         if (activeAudio.paused) {
             activeAudio.play();
@@ -469,16 +466,7 @@ async function listenToSummary(index, autoPlay = true) {
         return;
     }
 
-    // Check cache first for faster loading
-    const cacheKey = `${index}-${selectedVoice}`;
-    const cachedAudioUrl = audioCache.get(cacheKey);
-
-    if (cachedAudioUrl) {
-        console.log('Using cached audio for faster loading');
-        playAudio(cachedAudioUrl, index, listenBtn, loadingUI, progressBar, autoPlay);
-        return;
-    }
-
+    // ✅ Stop previous audio if switching
     stopActiveAudio();
     currentArticleIndex = index;
 
@@ -487,39 +475,28 @@ async function listenToSummary(index, autoPlay = true) {
     progressBar.value = 0;
     listenBtn.disabled = true;
     listenBtn.innerHTML = '⏳';
-
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     const langCode = selectedVoice.split('-')[0];
 
-    // --- NEW: Fetch full article content if needed ---
-    if (!article.full_content || article.full_content.length < 500) {
-        console.log('Fetching full article content...');
-        try {
+    try {
+        // 🔍 Fetch full content if needed
+        if (!article.full_content || article.full_content.length < 500) {
             const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
             const result = await res.json();
-            if (result.content && result.content.length > 500) {
-                article.full_content = result.content;
-            } else {
-                console.warn('Full content extraction failed or too short');
-                article.full_content = article.description || article.title || '';
-            }
-        } catch (err) {
-            console.error('Error fetching full article content:', err);
-            article.full_content = article.description || article.title || '';
+            article.full_content = result.content?.length > 500
+                ? result.content
+                : article.description || article.title || '';
         }
-    }
 
-    const rawText = article.full_content || article.content || article.description || article.title || '';
+        const rawText = article.full_content || article.content || article.description || article.title || '';
+        if (!rawText.trim()) {
+            alert(t.noText);
+            resetAudioUI(listenBtn, loadingUI, progressBar);
+            return;
+        }
 
-    if (!rawText.trim()) {
-        alert(t.noText);
-        resetAudioUI(listenBtn, loadingUI, progressBar);
-        return;
-    }
-
-    try {
-        // Optimize content if needed
+        // 🧠 Voice optimization
         if (!article.voiceOptimizedContent || article.voiceOptimizedContent.length < 30) {
             const res = await fetch('/api/news/voice-optimize', {
                 method: 'POST',
@@ -532,7 +509,7 @@ async function listenToSummary(index, autoPlay = true) {
 
         let summaryText = article.voiceOptimizedContent;
 
-        // Translate if needed
+        // 🌐 Translation if needed
         if (langCode !== 'en') {
             const res = await fetch('/api/news/translate', {
                 method: 'POST',
@@ -545,7 +522,7 @@ async function listenToSummary(index, autoPlay = true) {
             }
         }
 
-        // Generate TTS
+        // 🚀 Check Redis cache before generating
         const ttsRes = await fetch('/api/news/summary-audio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -562,7 +539,6 @@ async function listenToSummary(index, autoPlay = true) {
 
         if (result.audio_url) {
             audioCache.set(cacheKey, result.audio_url);
-
             if (audioCache.size > 20) {
                 const firstKey = audioCache.keys().next().value;
                 audioCache.delete(firstKey);
@@ -581,71 +557,106 @@ async function listenToSummary(index, autoPlay = true) {
     }
 }
 
+async function getOptimizedSummary(article, langCode) {
+    if (!article.full_content || article.full_content.length < 500) {
+        try {
+            const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
+            const result = await res.json();
+            article.full_content = result.content || article.description || article.title || '';
+        } catch (err) {
+            console.warn('Failed to fetch full content:', err);
+            article.full_content = article.description || article.title || '';
+        }
+    }
+
+    let summaryText = article.voiceOptimizedContent;
+
+    if (!summaryText || summaryText.length < 30) {
+        try {
+            const res = await fetch('/api/news/voice-optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: article.full_content,
+                    title: article.title
+                })
+            });
+            const result = await res.json();
+            summaryText = result.optimized_content?.trim() || article.full_content;
+            article.voiceOptimizedContent = summaryText; // Cache it
+        } catch (err) {
+            console.warn('Voice optimize failed:', err);
+            summaryText = article.full_content;
+        }
+    }
+
+    if (langCode !== 'en') {
+        try {
+            const res = await fetch('/api/news/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: summaryText,
+                    target_language: langCode
+                })
+            });
+            const result = await res.json();
+            if (result.translated_text?.trim()) {
+                summaryText = result.translated_text.trim();
+            }
+        } catch (err) {
+            console.warn('Translation failed:', err);
+        }
+    }
+
+    return summaryText;
+}
+
+
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     const t = translations.en;
 
-    // Si un autre audio joue, l’arrêter
+    // Stop previous audio if needed
     if (activeAudio) {
         activeAudio.pause();
         activeAudio.currentTime = 0;
         resetAudioUI(currentPlayButton, null, null);
     }
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
 
-    // Préparer l’interface
     loadingUI.classList.add('d-none');
     listenBtn.disabled = false;
 
-    // iOS nécessite une interaction utilisateur : instancier l’audio DANS le clic
-    if (isIOS || !autoPlay) {
-        listenBtn.innerHTML = '🔊 Tap to play';
-        listenBtn.onclick = () => {
-            activeAudio = new Audio(audioUrl);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-            // Ajouter les events une fois l'audio créé
-            setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
-
-            activeAudio.play().then(() => {
-                listenBtn.innerHTML = '‖';
-            }).catch(err => {
-                console.error('Playback error:', err);
-                alert(t.audioLoadError);
-            });
-
-            // Gestion pause/reprise
-            listenBtn.onclick = () => {
-                if (activeAudio.paused) {
-                    activeAudio.play();
-                    listenBtn.innerHTML = '‖';
-                } else {
-                    activeAudio.pause();
-                    listenBtn.innerHTML = '▶︎';
-                }
-            };
-        };
-    } else {
-        // Desktop : autoplay autorisé
+    // iOS and autoplay-restricted fallback
+    const setupAndPlay = () => {
         activeAudio = new Audio(audioUrl);
         setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
+
         activeAudio.play().then(() => {
             listenBtn.innerHTML = '‖';
         }).catch(err => {
-            console.warn('Autoplay blocked, switching to manual:', err);
+            console.warn('Playback failed:', err);
             listenBtn.innerHTML = '🔊 Tap to play';
             listenBtn.onclick = () => {
                 activeAudio.play().then(() => {
                     listenBtn.innerHTML = '‖';
-                }).catch(err => {
-                    alert(t.audioLoadError);
-                });
+                }).catch(() => alert(t.audioLoadError));
             };
         });
+    };
+
+    if (isIOS || !autoPlay) {
+        listenBtn.innerHTML = '🔊 Tap to play';
+        listenBtn.onclick = setupAndPlay;
+    } else {
+        setupAndPlay();
     }
 }
+
 function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     const t = translations.en;
 

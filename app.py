@@ -17,8 +17,9 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 from flask import send_file
-
-
+from cache import redis_client
+from tasks import generate_tts_task  # ← Import Celery task
+from celery.result import AsyncResult
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -259,73 +260,56 @@ def index():
 # Update the upload route to store the title
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    # Get the input method (text or file)
     input_method = request.form.get('input-method', 'text')
-    
-    # Process form data for voice/speed/depth
     voice_id = request.form.get('voice', 'en-US-JennyNeural')
     speed = float(request.form.get('speed', 1.0))
     depth = int(request.form.get('depth', 1))
-    
-    # Get title for the file if provided
     title = request.form.get('title', '')
-    
-    # Generate a unique job ID
+
     job_id = generate_unique_id()
-    
-    # Create temp directories if they don't exist
+
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
-    
+
     # Handle text input
     if input_method == 'text':
         text_content = request.form.get('text-content', '').strip()
-        
         if not text_content:
             return render_template('error.html', message="No text provided. Please enter some text to convert to speech.")
-        
-        # Save the text to a temporary file
+
         script_filename = f"text_input_{job_id}.txt"
         script_path = os.path.join(app.config['UPLOAD_FOLDER'], script_filename)
-        
         with open(script_path, 'w', encoding='utf-8') as f:
             f.write(text_content)
-    
-    # Handle file upload
+
     else:
-        # ... (existing file upload code)
         if 'script' not in request.files:
             return jsonify({'error': 'No script file provided'}), 400
-        
+
         script_file = request.files['script']
         if script_file.filename == '':
             return jsonify({'error': 'No script file selected'}), 400
-        
+
         if not script_file or not allowed_file(script_file.filename):
             return jsonify({'error': 'Invalid file format. Please upload a .txt file for scripts'}), 400
-        
-        # Save the uploaded file
+
         script_filename = secure_filename(script_file.filename)
         script_path = os.path.join(app.config['UPLOAD_FOLDER'], script_filename)
         script_file.save(script_path)
-        
-        # If no title was provided, use the filename (without extension) as title
+
         if not title and script_filename:
             title = os.path.splitext(script_filename)[0]
-    
-    # Generate safe filename from title if available
+
     output_filename = f"tts_{job_id}.mp3"
     if title:
-        # Create a safe filename from the title
         safe_title = secure_filename(title)
         if safe_title:
             output_filename = f"{safe_title}_{job_id}.mp3"
-    
+
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-    
-    # Store title and other values in job info for reference
+
     jobs[job_id] = {
-        'status': 'pending',
+        'status': 'queued',
         'script_file': script_path,
         'output_file': output_path,
         'start_time': time.time(),
@@ -336,28 +320,18 @@ def upload_file():
         'title': title,
         'filename': output_filename
     }
-    
-    # Start the processing task in a background thread
-    process_task = generate_simple_tts(
-        script_path, output_path, voice_id, speed, depth
-    )
-    
-    thread = threading.Thread(
-        target=run_async_task,
-        args=(process_task, job_id)
-    )
-    thread.daemon = True
-    thread.start()
-    
+
+    # 🔁 Offload to Celery background worker
+    task = generate_tts_task.delay(script_path, output_path, voice_id, speed, depth)
+    jobs[job_id]['task_id'] = task.id
+
     # Store job ID in session
     if 'jobs' not in session:
         session['jobs'] = []
     session['jobs'].append(job_id)
     session.modified = True
-    
+
     return redirect(url_for('job_status', job_id=job_id))
-
-
 
 @app.route('/status/<job_id>')
 def job_status(job_id):
@@ -365,20 +339,17 @@ def job_status(job_id):
         return render_template('error.html', message="Job not found.")
     
     job = jobs[job_id]
-    # Pass the AVAILABLE_VOICES list to the template
-    return render_template('status.html', job_id=job_id, job=job, voices=AVAILABLE_VOICES)
+    
+    # If using Celery, get actual task status
+    if 'task_id' in job:
+        task_result = AsyncResult(job['task_id'])
+        job['celery_status'] = task_result.status
 
-@app.route('/api/status/<job_id>')
-def api_job_status(job_id):
-    if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
-    
-    job = jobs[job_id].copy()
-    # Calculate elapsed time
-    elapsed = time.time() - job['start_time']
-    job['elapsed_time'] = elapsed
-    
-    return jsonify(job)
+        if task_result.successful() and job['status'] != 'completed':
+            job['status'] = 'completed'
+            job['result'] = job['output_file']
+
+    return render_template('status.html', job_id=job_id, job=job, voices=AVAILABLE_VOICES)
 
 @app.route('/download/<job_id>')
 def download_file(job_id):
@@ -500,55 +471,63 @@ def news_page():
 
 @app.route('/api/news')
 def get_news():
-    """API endpoint to fetch news from GNews"""
     category = request.args.get('category', 'general')
     language = request.args.get('language', 'en')
-    query = request.args.get('query', '').strip()
+    query = request.args.get('query', '')
+
+    cache_key = f"news:{language}:{category}:{query}"
+    cached_data = redis_client.get(cache_key)
+
+    if cached_data:
+        return jsonify(json.loads(cached_data))
 
     try:
-        # If query exists and is not just whitespace, use search
-        if query:
-            results = gnews_client.search_news(query=query, language=language)
-        else:
-            results = gnews_client.get_top_headlines(category=category, language=language)
+        # ✅ Correct method name from your GNewsClient
+        data = gnews_client.get_top_headlines(
+            category=category,
+            language=language,
+            query=query,
+            max_results=10
+        )
+        redis_client.setex(cache_key, 1800, json.dumps(data))  # Cache for 30 mins
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-        return jsonify(results)
 
-    except Exception:
-        # Return clean error message to user
-        return jsonify({
-            "error": "Sorry, we couldn't load news articles at the moment. Please try again later .",
-            "articles": []
-        }), 500
-
+import hashlib  # assure-toi que c'est bien en haut
 
 @app.route('/api/news/content')
 def get_article_content():
-    """API endpoint to fetch and extract content from a news article"""
-    # Get the article URL
     url = request.args.get('url', '')
-    
     if not url:
         return jsonify({"error": "No URL provided"}), 400
-    
+
     try:
-        # Use our GNewsClient to fetch article content
+        # 🔒 Redis cache based on URL hash
+        cache_key = f"article_content:{hashlib.sha256(url.encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return jsonify(json.loads(cached))
+
         result = gnews_client.fetch_article_content(url)
-        
-        # Add a fallback content if extraction failed but we didn't get an exception
+
+        # Fallback if empty
         if not result.get('content') or len(result.get('content', '').strip()) < 100:
-            app.logger.warning(f"Content extraction returned minimal/no content for {url}")
-            result['extraction_error'] = "Could not extract sufficient content from this article"
-            result['content'] = result.get('content', '') or "This article's content couldn't be extracted automatically. Please try visiting the original article."
-        
+            result['extraction_error'] = "Could not extract sufficient content"
+            result['content'] = "This article's content couldn't be extracted automatically."
+
+        redis_client.setex(cache_key, 3600, json.dumps(result))  # cache 1h
         return jsonify(result)
+
     except Exception as e:
         app.logger.error(f"Error fetching article content: {str(e)}")
         return jsonify({
-            "error": str(e), 
-            "content": "Failed to extract article content. Some websites prevent automatic content extraction.",
+            "error": str(e),
+            "content": "Failed to extract article content.",
             "url": url
-        }), 200  # Return 200 to handle the error on the client side
+        }), 200
+
 
 @app.route('/api/newsletter-subscribe', methods=['POST'])
 def newsletter_subscribe():
@@ -600,54 +579,7 @@ def optimize_article_for_voice():
     except Exception as e:
         app.logger.error(f"Error optimizing content: {str(e)}")
         return jsonify({"error": "Please try again."}), 500
-@app.route('/api/news/youtube-script', methods=['POST'])
-def generate_news_youtube_script_route():
-    """Generate a YouTube-style news script based on article content"""
-    # Get request data
-    data = request.json
-    
-    if not data or 'content' not in data:
-        return jsonify({"error": "No content provided"}), 400
-    
-    try:
-        # Extract parameters
-        content = data.get('content', '')
-        title = data.get('title', '')
-        source = data.get('source', '')
-        word_limit = data.get('word_limit', 300)
-        
-        # Validate word limit
-        try:
-            word_limit = int(word_limit)
-            if word_limit < 100:
-                word_limit = 100
-            elif word_limit > 500:
-                word_limit = 500
-        except (ValueError, TypeError):
-            word_limit = 300
-        
-        # Generate the YouTube news script
-        result = generate_youtube_news_script(content, title, source, word_limit)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": "Please try again."}), 500
-        
-    except Exception as e:
-        app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": "Please try again."}), 500
 
-    except Exception as e:
-        app.logger.error(f"Error optimizing content: {str(e)}")
-        return jsonify({"error": "Please try again."}), 500
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-    
-
-    # Replace your existing stream_temp_audio and generate_summary_audio functions with these:
 
 @app.route('/stream-temp-audio/<path:path>')
 def stream_temp_audio(path):
@@ -678,6 +610,9 @@ def stream_temp_audio(path):
 
 @app.route('/api/news/summary-audio', methods=['POST'])
 def summary_audio():
+    import hashlib
+    from cache import redis_client  # Ensure this import is at the top of app.py
+
     data = request.json
     text = data.get("content", "")
     voice_id = data.get("voice_id", "en-CA-LiamNeural")
@@ -688,26 +623,39 @@ def summary_audio():
         return jsonify({"error": "No text provided"}), 400
 
     try:
-        # Write text to a temp file
+        # --- Generate cache key ---
+        hash_key = hashlib.sha256((text + voice_id).encode('utf-8')).hexdigest()
+        cache_key = f"tts:{hash_key}"
+
+        # --- Check Redis cache ---
+        cached_url = redis_client.get(cache_key)
+        if cached_url:
+            return jsonify({"audio_url": cached_url})
+
+        # --- If not cached, generate audio ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w', encoding='utf-8') as temp:
             temp.write(text)
             script_path = temp.name
 
-        # Output file path
         output_filename = f"{int(time.time())}_{voice_id}.mp3"
         output_audio = os.path.join("static/audio", output_filename)
 
-        # Generate audio
+        # Create output directory if missing
+        os.makedirs(os.path.dirname(output_audio), exist_ok=True)
+
+        # Run TTS generation
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(generate_simple_tts(script_path, output_audio, voice_id, speed, depth))
+
+        # Save audio path in Redis (24h = 86400 sec)
+        redis_client.set(cache_key, f"/static/audio/{output_filename}", ex=86400)
 
         return jsonify({"audio_url": f"/static/audio/{output_filename}"})
 
     except Exception as e:
         app.logger.error(f"TTS error: {e}")
         return jsonify({"error": "Please try again."}), 500
-
 
 # Optional: Add a cleanup function to remove old temp filesssssssssssssssssssssss
 def cleanup_old_files():
@@ -731,37 +679,36 @@ def cleanup_old_files():
 
 @app.route('/api/news/translate', methods=['POST'])
 def translate_text():
-    """API endpoint to translate text using Gemini."""
     data = request.json
     text_to_translate = data.get('text')
-    target_language_code = data.get('target_language') # e.g., 'ar', 'fr', 'es'
+    target_language_code = data.get('target_language')  # e.g., 'ar', 'fr'
 
     if not text_to_translate or not target_language_code:
-        return jsonify({"error": "Missing 'text' or 'target_language' in request"}), 400
+        return jsonify({"error": "Missing 'text' or 'target_language'"}), 400
 
     try:
-        # Use Gemini for translation
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        
-        # Craft a prompt for translation
-        prompt = f"Translate the following English text to {target_language_code} without adding any extra information or conversational filler. Only provide the translated text:\n\n{text_to_translate}"
-        
-        # For simplicity, let's assume direct translation.
-        # For more complex scenarios, you might need to handle context better.
-        response = model.generate_content(prompt)
-        
-        # Extract the translated text. Handle potential errors or empty responses from Gemini.
-        translated_text = response.text.strip()
-        
-        # Simple check for cases where Gemini might return something unexpected
-        if not translated_text:
-            raise ValueError("Gemini returned empty or unparseable translation.")
+        # 🔒 Redis cache key
+        cache_key = f"translate:{target_language_code}:{hashlib.sha256(text_to_translate.encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return jsonify({"translated_text": cached.decode()})
 
+        # Translate using Gemini
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        prompt = f"Translate the following English text to {target_language_code}:\n\n{text_to_translate}"
+        response = model.generate_content(prompt)
+        translated_text = response.text.strip()
+
+        if not translated_text:
+            raise ValueError("Gemini returned empty translation")
+
+        redis_client.setex(cache_key, 86400, translated_text)  # 1 day cache
         return jsonify({"translated_text": translated_text})
 
     except Exception as e:
-        app.logger.error(f"Error translating text with Gemini: {e}")
+        app.logger.error(f"Gemini translation error: {e}")
         return jsonify({"error": f"Failed to translate text: {str(e)}"}), 500
+
     
 @app.route('/api/news/test-keys')
 def test_gnews_keys():
