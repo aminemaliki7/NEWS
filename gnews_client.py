@@ -6,11 +6,20 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Try to import Redis client, fallback gracefully if not available
+try:
+    from redis_client import redis_client
+    REDIS_AVAILABLE = True
+except ImportError:
+    print("[GNews] Redis client not available, running without cache")
+    REDIS_AVAILABLE = False
+    redis_client = None
+
 class GNewsClient:
-    """Client for interacting with the GNews API (with multi-key failover)"""
+    """Client for interacting with the GNews API with Redis caching and smart key management"""
     
     def __init__(self):
-        # Load 5 API keys from .env
+        # Load 8 API keys from .env
         self.api_keys = [
             os.getenv('GNEWS_API_KEY_1'),
             os.getenv('GNEWS_API_KEY_2'),
@@ -23,12 +32,35 @@ class GNewsClient:
         ]
         
         if not any(self.api_keys):
-            raise ValueError("No GNEWS_API_KEY_X set in .env") # This is a dev-facing error, acceptable.
+            raise ValueError("No GNEWS_API_KEY_X set in .env")
         
         self.api_index = 0
         self.base_url = "https://gnews.io/api/v4"
     
+    def _get_next_available_key(self):
+        """Get the next available API key (not in cooldown)"""
+        for _ in range(len(self.api_keys)):
+            current_key = self.api_keys[self.api_index]
+            
+            if current_key and (not REDIS_AVAILABLE or redis_client.is_api_key_available(self.api_index)):
+                return current_key, self.api_index
+            
+            # Move to next key
+            self.api_index = (self.api_index + 1) % len(self.api_keys)
+        
+        # If all keys are in cooldown, return the current one anyway
+        return self.api_keys[self.api_index], self.api_index
+    
     def get_top_headlines(self, category=None, language="en", country="us", max_results=10, query=None):
+        """Get top headlines with Redis caching"""
+        
+        # 🚀 CHECK CACHE FIRST (if Redis available)
+        if REDIS_AVAILABLE:
+            cached_articles = redis_client.get_cached_news_headlines(category or "general", language, country)
+            if cached_articles:
+                return {"articles": cached_articles}
+        
+        # 📡 CACHE MISS - Fetch from API
         endpoint = f"{self.base_url}/top-headlines"
         
         params = {
@@ -46,24 +78,46 @@ class GNewsClient:
         MAX_RETRIES = len(self.api_keys)
         
         for attempt in range(MAX_RETRIES):
-            current_token = self.api_keys[self.api_index]
+            current_token, key_index = self._get_next_available_key()
+            
             if not current_token:
-                print(f"[GNews] Skipping empty key at index {self.api_index + 1}")
+                print(f"[GNews] Skipping empty key at index {key_index + 1}")
                 self.api_index = (self.api_index + 1) % MAX_RETRIES
                 continue
             
             params["token"] = current_token
             
             try:
+                # Track API usage (if Redis available)
+                if REDIS_AVAILABLE:
+                    redis_client.track_api_key_usage(key_index, 'gnews')
+                
                 response = requests.get(endpoint, params=params)
                 response.raise_for_status()
-                return response.json()
+                
+                result = response.json()
+                articles = result.get('articles', [])
+                
+                # 💾 CACHE THE RESULT (if Redis available)
+                if REDIS_AVAILABLE:
+                    redis_client.cache_news_headlines(
+                        category or "general", 
+                        language, 
+                        country, 
+                        articles,
+                        ttl=900  # 15 minutes
+                    )
+                
+                print(f"[GNews] ✅ API success with key {key_index + 1}")
+                return result
             
             except requests.exceptions.HTTPError as e:
-                print(f"[GNews] API key {self.api_index + 1} failed: {e}") # Internal log
+                print(f"[GNews] API key {key_index + 1} failed: {e}")
                 
                 if response.status_code in [401, 403, 429]:
-                    # Rotate to next key for these specific API errors
+                    # Mark key as failed and move to next (if Redis available)
+                    if REDIS_AVAILABLE:
+                        redis_client.mark_api_key_failed(key_index, 'gnews', cooldown_seconds=3600)
                     self.api_index = (self.api_index + 1) % MAX_RETRIES
                     continue
                 else:
@@ -71,17 +125,25 @@ class GNewsClient:
                     break
             
             except requests.exceptions.RequestException as e:
-                print(f"[GNews] Request error: {e}") # Internal log
-                # For network/request errors, break and return generic failure
+                print(f"[GNews] Request error: {e}")
                 break
         
-        # If all retries fail or an unrecoverable error occurs
+        # If all retries fail
         return {
             "articles": [],
-            "error": "Unable to load articles at the moment." # Generic message
+            "error": "Unable to load articles at the moment."
         }
     
     def search_news(self, query, language="en", country="us", max_results=10, from_date=None, to_date=None):
+        """Search news with Redis caching"""
+        
+        # 🚀 CHECK CACHE FIRST (if Redis available)
+        if REDIS_AVAILABLE:
+            cached_articles = redis_client.get_cached_news_search(query, language, country)
+            if cached_articles:
+                return {"articles": cached_articles}
+        
+        # 📡 CACHE MISS - Fetch from API
         endpoint = f"{self.base_url}/search"
         
         params = {
@@ -99,38 +161,69 @@ class GNewsClient:
         MAX_RETRIES = len(self.api_keys)
         
         for attempt in range(MAX_RETRIES):
-            current_token = self.api_keys[self.api_index]
+            current_token, key_index = self._get_next_available_key()
+            
             if not current_token:
-                print(f"[GNews] Skipping empty key at index {self.api_index + 1}") # Internal log
+                print(f"[GNews] Skipping empty key at index {key_index + 1}")
                 self.api_index = (self.api_index + 1) % MAX_RETRIES
                 continue
             
             params["token"] = current_token
             
             try:
+                # Track API usage (if Redis available)
+                if REDIS_AVAILABLE:
+                    redis_client.track_api_key_usage(key_index, 'gnews')
+                
                 response = requests.get(endpoint, params=params)
                 response.raise_for_status()
-                return response.json()
+                
+                result = response.json()
+                articles = result.get('articles', [])
+                
+                # 💾 CACHE THE RESULT (if Redis available)
+                if REDIS_AVAILABLE:
+                    redis_client.cache_news_search(
+                        query,
+                        language,
+                        country,
+                        articles,
+                        ttl=1800  # 30 minutes
+                    )
+                
+                print(f"[GNews] ✅ Search success with key {key_index + 1}")
+                return result
             
             except requests.exceptions.HTTPError as e:
-                print(f"[GNews] API key {self.api_index + 1} failed: {e}") # Internal log
+                print(f"[GNews] API key {key_index + 1} failed: {e}")
                 
                 if response.status_code in [401, 403, 429]:
+                    if REDIS_AVAILABLE:
+                        redis_client.mark_api_key_failed(key_index, 'gnews', cooldown_seconds=3600)
                     self.api_index = (self.api_index + 1) % MAX_RETRIES
                     continue
                 else:
                     break
             
             except requests.exceptions.RequestException as e:
-                print(f"[GNews] Request error: {e}") # Internal log
+                print(f"[GNews] Request error: {e}")
                 break
         
         return {
             "articles": [],
-            "error": "Unable to load articles at the moment." # Generic message
+            "error": "Unable to load articles at the moment."
         }
     
     def fetch_article_content(self, url):
+        """Fetch article content with Redis caching"""
+        
+        # 🚀 CHECK CACHE FIRST (if Redis available)
+        if REDIS_AVAILABLE:
+            cached_content = redis_client.get_cached_article_content(url)
+            if cached_content:
+                return cached_content
+        
+        # 📡 CACHE MISS - Fetch from web
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -144,7 +237,6 @@ class GNewsClient:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
-            # Print statements for internal debugging, not user-facing
             print(f"Response status: {response.status_code}")
             print(f"Response headers: {response.headers}")
             
@@ -152,45 +244,51 @@ class GNewsClient:
             if 'application/json' in content_type:
                 json_data = response.json()
                 article_text = self._extract_text_from_json(json_data)
-                return {
+                result = {
                     "title": self._extract_title_from_json(json_data),
                     "content": article_text,
                     "url": url,
                     "extraction_time": datetime.now().isoformat()
                 }
+            else:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                title = soup.title.string if soup.title else "Unknown Title"
+                content = self._extract_content_with_multiple_strategies(soup)
+                
+                if not content or len(content) < 100:
+                    paragraphs = soup.find_all('p')
+                    content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 40])
+                
+                if not content or len(content) < 100:
+                    result = {
+                        "title": title,
+                        "content": "This article's content couldn't be extracted automatically. Please visit the original article at " + url,
+                        "url": url,
+                        "extraction_error": "Content extraction failed"
+                    }
+                else:
+                    result = {
+                        "title": title,
+                        "content": content,
+                        "url": url,
+                        "extraction_time": datetime.now().isoformat()
+                    }
             
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # 💾 CACHE THE RESULT (if Redis available)
+            if REDIS_AVAILABLE:
+                redis_client.cache_article_content(url, result, ttl=86400)  # 24 hours
             
-            title = soup.title.string if soup.title else "Unknown Title"
-            content = self._extract_content_with_multiple_strategies(soup)
-            
-            if not content or len(content) < 100:
-                paragraphs = soup.find_all('p')
-                content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 40])
-            
-            if not content or len(content) < 100:
-                return {
-                    "title": title,
-                    "content": "This article's content couldn't be extracted automatically. Please visit the original article at " + url,
-                    "url": url,
-                    "extraction_error": "Content extraction failed"
-                }
-            
-            return {
-                "title": title,
-                "content": content,
-                "url": url,
-                "extraction_time": datetime.now().isoformat()
-            }
+            return result
         
         except Exception as e:
-            print(f"[GNews] Error extracting article content: {e}") # Internal log
+            print(f"[GNews] Error extracting article content: {e}")
             return {
                 "title": "Content Extraction Failed",
                 "content": "Unable to extract content from this article.",
                 "url": url,
-                "error": "Content extraction failed. Please try again." # Generic message
+                "error": "Content extraction failed. Please try again."
             }
     
     def _extract_content_with_multiple_strategies(self, soup):
@@ -221,7 +319,7 @@ class GNewsClient:
                             if len(content) > 200:
                                 return content
             except Exception as e:
-                print(f"Error in selector {selector}: {e}") # Internal log
+                print(f"Error in selector {selector}: {e}")
                 continue
         
         paragraphs_by_parent = {}

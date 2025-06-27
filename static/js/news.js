@@ -1,17 +1,25 @@
-// Global variables
+// ==================== GLOBAL VARIABLES ====================
 let articles = [];
 let currentCategory = localStorage.getItem('lastCategory') || 'general';
-// currentLanguage is primarily for the news fetching API, audio language is handled per article.
-let currentLanguage = 'en'; // Keep for news fetching API, but not for audio TTS language parameter.
+let currentLanguage = 'en';
 let currentQuery = '';
-let siteLanguage = 'en'; // Force English for general interface texts
 let darkMode = localStorage.getItem('darkMode') === 'true';
 
 // Audio state
 let activeAudio = null;
 let currentPlayButton = null;
 let currentArticleIndex = null;
-let audioCache = new Map(); // Cache for faster audio loading
+let audioCache = new Map();
+
+// Performance tracking
+let performanceCache = {
+    newsHits: 0,
+    newsMisses: 0,
+    contentHits: 0,
+    contentMisses: 0,
+    audioHits: 0,
+    audioMisses: 0
+};
 
 // DOM elements
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -20,7 +28,7 @@ const errorState = document.getElementById('errorState');
 const newsList = document.getElementById('newsList');
 const newsTemplate = document.getElementById('newsArticleTemplate');
 
-// Language translations - Only keep English for UI texts, but audio can be multi-language
+// Translations
 const translations = {
     en: {
         title: "📰 News Reader",
@@ -34,8 +42,7 @@ const translations = {
             technology: "Technology",
             sports: "Sports",
             health: "Health",
-            entertainment: "Entertainment",
-            Fashion: "Fashion" // Added Fashion to translations
+            entertainment: "Entertainment"
         },
         noNews: "No news found for",
         tryDifferent: "Try a different keyword or category.",
@@ -44,11 +51,9 @@ const translations = {
         yesterday: "Yesterday",
         daysAgo: "days ago",
         readFull: "Read article",
-        listen: "Listen", // This will be replaced by play/pause icons
-        selectVoice: "Select Voice", // Not explicitly used in this HTML version, but good to keep
+        listen: "Listen",
         darkMode: "Dark Mode",
         lightMode: "Light Mode",
-        language: "Language", // Not explicitly used in this HTML version, but good to keep
         noDescription: "No description available.",
         noText: "This article does not contain any usable text.",
         audioFailed: "Failed to generate audio.",
@@ -59,22 +64,21 @@ const translations = {
     }
 };
 
-// Initialize
+// ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
-    // Apply saved preferences
     document.getElementById('category').value = currentCategory;
-
-    // Initialize theme and language
     initializeTheme();
-    updateInterfaceLanguage(); // Call directly to set English texts
+    updateInterfaceLanguage();
     addThemeControl();
     updateCurrentDate();
     setupEventListeners();
     loadNews();
+    startOptimizations();
 });
 
-// Event listeners
+// ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
+    // Category links
     document.querySelectorAll('.category-link').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
@@ -87,6 +91,7 @@ function setupEventListeners() {
         });
     });
 
+    // Search functionality
     document.getElementById('searchBtn').addEventListener('click', () => {
         currentQuery = document.getElementById('searchQuery').value;
         currentCategory = document.getElementById('category').value;
@@ -98,10 +103,33 @@ function setupEventListeners() {
         if (e.key === 'Enter') document.getElementById('searchBtn').click();
     });
 
+    // Optimized search with faster debounce
     document.getElementById('searchQuery').addEventListener('input', debounce(() => {
         currentQuery = document.getElementById('searchQuery').value;
         loadNews();
-    }, 600));
+    }, 400));
+
+    // Voice selection changes
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('voice-select')) {
+            const articleIndex = parseInt(e.target.dataset.articleIndex);
+            const newVoice = e.target.value;
+            localStorage.setItem('lastVoice', newVoice);
+
+            // Immediate cache invalidation
+            const cacheKey = `${articleIndex}-${newVoice}`;
+            audioCache.delete(cacheKey);
+
+            // Instant regeneration if currently playing
+            if (currentArticleIndex === articleIndex) {
+                const wasPlaying = activeAudio && !activeAudio.paused;
+                stopActiveAudio();
+                if (wasPlaying) {
+                    listenToSummary(articleIndex, true);
+                }
+            }
+        }
+    });
 }
 
 function debounce(fn, delay) {
@@ -112,13 +140,7 @@ function debounce(fn, delay) {
     };
 }
 
-function updateCurrentDate() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    document.getElementById('currentDateDisplay').textContent = now.toLocaleDateString('en-US', options); // Force en-US locale
-}
-
-// Theme Functions
+// ==================== THEME MANAGEMENT ====================
 function initializeTheme() {
     if (darkMode) {
         document.body.classList.add('dark-mode');
@@ -139,11 +161,8 @@ function addThemeControl() {
                     <span class="theme-text">${translations.en[darkMode ? 'lightMode' : 'darkMode']}</span>
                 </button>
             </div>
-
             <div class="newsletter-subscribe">
-                <button id="newsletterBtn" class="btn btn-outline-primary btn-sm">
-                    Newsletter
-                </button>
+                <button id="newsletterBtn" class="btn btn-outline-primary btn-sm">Newsletter</button>
             </div>
         </div>
     `;
@@ -159,55 +178,6 @@ function addThemeControl() {
         document.getElementById('newsletterBtn').addEventListener('click', openNewsletterPopup);
     }
 }
-function openNewsletterPopup() {
-    const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
-    modal.show();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('newsletterForm');
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const email = document.getElementById('newsletterEmail').value.trim();
-        if (!email || !email.includes('@')) {
-            alert('Please enter a valid email address.');
-            return;
-        }
-
-        const categories = [];
-        document.querySelectorAll('#newsletterForm input[type="checkbox"]:checked').forEach(checkbox => {
-            categories.push(checkbox.value);
-        });
-
-        fetch('/api/newsletter-subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: email,
-                categories: categories
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Subscription failed: ' + data.error);
-            } else {
-                alert('Thank you for subscribing! 📬');
-                const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
-                modal.hide();
-                form.reset();
-            }
-        })
-        .catch(err => {
-            console.error('Subscription error:', err);
-            alert('An error occurred. Please try again later.');
-        });
-    });
-});
-
-
-
 
 function toggleTheme() {
     darkMode = !darkMode;
@@ -222,34 +192,39 @@ function toggleTheme() {
     if (themeText) themeText.textContent = translations.en[darkMode ? 'lightMode' : 'darkMode'];
 }
 
-// Simplified language update function, always using English for UI
-function updateInterfaceLanguage() {
-    const t = translations.en; // Always use English translations for UI
+function openNewsletterPopup() {
+    const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
+    modal.show();
+}
 
-    // Update title
-    const titleElement = document.querySelector('.journal-title'); // Corrected selector for H1
+// ==================== UI UPDATES ====================
+function updateCurrentDate() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDateDisplay').textContent = now.toLocaleDateString('en-US', options);
+}
+
+function updateInterfaceLanguage() {
+    const t = translations.en;
+
+    const titleElement = document.querySelector('.journal-title');
     if (titleElement) titleElement.textContent = t.title;
 
-    // Update search placeholder
     const searchInput = document.getElementById('searchQuery');
     if (searchInput) searchInput.placeholder = t.search;
 
-    // Update search button
     const searchBtn = document.getElementById('searchBtn');
     if (searchBtn) searchBtn.textContent = t.searchBtn;
 
-    // Update category links
     document.querySelectorAll('.category-link').forEach(link => {
         const category = link.dataset.category;
         if (t.categories[category]) {
             link.textContent = t.categories[category];
         }
     });
-
-    // Language label and select are removed from HTML, so no need to hide/remove them here.
 }
 
-
+// ==================== LOADING STATES ====================
 function showLoading() {
     loadingIndicator.classList.remove('d-none');
     emptyState.classList.add('d-none');
@@ -268,7 +243,7 @@ function showEmpty() {
     loadingIndicator.classList.add('d-none');
     errorState.classList.add('d-none');
     emptyState.classList.remove('d-none');
-    const t = translations.en; // Always use English translations
+    const t = translations.en;
     emptyState.textContent = `😕 ${t.noNews} "${currentQuery || currentCategory}". ${t.tryDifferent}`;
 }
 
@@ -278,25 +253,44 @@ function hideStates() {
     errorState.classList.add('d-none');
 }
 
+// ==================== OPTIMIZED NEWS LOADING ====================
 async function loadNews() {
     showLoading();
+    const startTime = performance.now();
+    
     try {
-        const params = new URLSearchParams({ category: currentCategory, language: currentLanguage }); // currentLanguage defaults to 'en' for news API
+        const params = new URLSearchParams({ category: currentCategory, language: currentLanguage });
         if (currentQuery) params.append('query', currentQuery);
+        
         const response = await fetch(`/api/news?${params}`);
         const data = await response.json();
+        
         if (data.error) throw new Error(data.error);
+        
         articles = data.articles || [];
         if (!articles.length) return showEmpty();
         
-        displayNews(articles);  // Render articles
-
-        setupCommentForms();    // Load comments for each article ⬅️ VERY IMPORTANT
-
+        // Performance tracking
+        const loadTime = performance.now() - startTime;
+        const isCacheHit = loadTime < 500;
+        
+        if (isCacheHit) {
+            performanceCache.newsHits++;
+        } else {
+            performanceCache.newsMisses++;
+        }
+        
+        displayNews(articles);
+        setupCommentForms();
         hideStates();
+        
+        // Preload content for better performance
+        preloadContent();
+        
     } catch (error) {
         console.error('Error loading news:', error);
         showError(error.message);
+        performanceCache.newsMisses++;
     }
 }
 
@@ -305,7 +299,6 @@ function displayNews(articlesData) {
     const totalArticles = articlesData.length;
 
     articlesData.forEach((article, index) => {
-        // Determine if this is the last article
         const isLastArticle = (index === totalArticles - 1);
         const articleElement = createArticleElement(article, index, isLastArticle);
         newsList.appendChild(articleElement);
@@ -314,23 +307,17 @@ function displayNews(articlesData) {
 
 function createArticleElement(article, index, isLastArticle = false) {
     const template = newsTemplate.content.cloneNode(true);
-    const t = translations.en; // Always use English translations for UI text within the article card
+    const t = translations.en;
 
-    // Get the root <article> element from the template
     const articleRoot = template.querySelector('.news-article');
 
-    // Dynamically apply column classes
     if (isLastArticle) {
-        // Last article: full width on all devices (col-12)
-        articleRoot.classList.remove('col-md-6', 'col-lg-4'); // Remove original Bootstrap column classes
-        articleRoot.classList.add('col-12', 'full-width-article'); // Ensure it takes full width
+        articleRoot.classList.remove('col-md-6', 'col-lg-4');
+        articleRoot.classList.add('col-12', 'full-width-article');
     } else {
-        // Regular articles: 3 columns on large, 2 on medium, 1 on small
         articleRoot.classList.add('col-12', 'col-md-6', 'col-lg-4');
     }
-    // Add margin bottom for all articles
     articleRoot.classList.add('mb-3', 'd-flex');
-
 
     template.querySelector('.article-title').textContent = article.title || 'No Title';
     template.querySelector('.source-name').textContent = article.source?.name || t.unknownSource;
@@ -348,85 +335,31 @@ function createArticleElement(article, index, isLastArticle = false) {
 
     const readBtn = template.querySelector('.article-read-btn');
     readBtn.href = article.url;
-    readBtn.title = t.readFull; // Using title for tooltip
+    readBtn.title = t.readFull;
 
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
-    listenBtn.innerHTML = '▶︎ '; // Ensure space for icon
-    listenBtn.title = t.listen; // Set tooltip
+    listenBtn.innerHTML = '▶︎ ';
+    listenBtn.title = t.listen;
     listenBtn.onclick = () => listenToSummary(index);
 
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
-    voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural'; // Default to an English voice
+    voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural';
 
     const progress = template.querySelector('.audio-progress');
     progress.style.display = 'none';
     progress.value = 0;
 
-    // Generate unique article_id based on URL (safe for Firestore)
     const articleId = btoa(article.url || article.title || article.publishedAt || `${index}`);
     template.querySelector('.article-comments').dataset.articleId = articleId;
 
     return template;
 }
 
-
-
-function stopActiveAudio() {
-    if (activeAudio) {
-        activeAudio.pause();
-        activeAudio.currentTime = 0;
-        if (currentPlayButton) {
-            currentPlayButton.innerHTML = '▶︎ '; // Reset to play icon
-            currentPlayButton.disabled = false;
-        }
-
-        if (currentArticleIndex !== null) {
-            const card = document.querySelector(`.article-listen-btn[data-index="${currentArticleIndex}"]`)?.closest('.card');
-            if (card) {
-                const loadingUI = card.querySelector('.audio-loading');
-                const progressBar = card.querySelector('.audio-progress');
-                if (loadingUI) loadingUI.classList.add('d-none');
-                if (progressBar) progressBar.style.display = 'none';
-            }
-        }
-
-        activeAudio = null;
-        currentPlayButton = null;
-        currentArticleIndex = null;
-    }
-}
-
-document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('voice-select')) {
-        const articleIndex = parseInt(e.target.dataset.articleIndex);
-        const newVoice = e.target.value;
-        localStorage.setItem('lastVoice', newVoice); // Save the last selected voice
-
-        console.log(`Voice changed for article ${articleIndex}: ${newVoice}`);
-
-        // Invalidate cache for this article with the new voice
-        const cacheKey = `${articleIndex}-${newVoice}`;
-        audioCache.delete(cacheKey);
-
-        // If the voice was changed for the currently playing/active article,
-        // stop it and try to regenerate/play with the new voice.
-        if (currentArticleIndex === articleIndex) {
-            console.log('Voice changed for active article, regenerating immediately...');
-
-            const wasPlaying = activeAudio && !activeAudio.paused; // Check if it was playing
-
-            stopActiveAudio(); // Stop current audio
-            // Start playing the new audio immediately if it was previously playing
-            listenToSummary(articleIndex, wasPlaying);
-        }
-    }
-});
-
 function formatDate(dateString) {
-    const t = translations.en; // Always use English translations
+    const t = translations.en;
     if (!dateString) return t.unknownDate;
 
     const date = new Date(dateString);
@@ -437,9 +370,10 @@ function formatDate(dateString) {
     if (diffDays === 1) return t.yesterday;
     if (diffDays < 7) return `${diffDays} ${t.daysAgo}`;
 
-    return date.toLocaleDateString('en-US'); // Force en-US locale
+    return date.toLocaleDateString('en-US');
 }
 
+// ==================== OPTIMIZED AUDIO GENERATION ====================
 async function listenToSummary(index, autoPlay = true) {
     const article = articles[index];
     const voiceSelect = document.getElementById(`voice-select-${index}`);
@@ -448,11 +382,11 @@ async function listenToSummary(index, autoPlay = true) {
     const card = listenBtn.closest('.card');
     const loadingUI = card.querySelector('.audio-loading');
     const progressBar = card.querySelector('.audio-progress');
-    const t = translations[siteLanguage];
+    const t = translations.en;
 
     if (!article || !selectedVoice || !listenBtn) return;
 
-    // Stop any other playing audio first (only one at a time)
+    // Stop other audio
     if (activeAudio && currentArticleIndex !== index) {
         stopActiveAudio();
     }
@@ -469,16 +403,17 @@ async function listenToSummary(index, autoPlay = true) {
         return;
     }
 
-    // Check cache first for faster loading
+    // Check cache first for instant playback
     const cacheKey = `${index}-${selectedVoice}`;
     const cachedAudioUrl = audioCache.get(cacheKey);
 
     if (cachedAudioUrl) {
-        console.log('Using cached audio for faster loading');
+        performanceCache.audioHits++;
         playAudio(cachedAudioUrl, index, listenBtn, loadingUI, progressBar, autoPlay);
         return;
     }
 
+    performanceCache.audioMisses++;
     stopActiveAudio();
     currentArticleIndex = index;
 
@@ -488,39 +423,25 @@ async function listenToSummary(index, autoPlay = true) {
     listenBtn.disabled = true;
     listenBtn.innerHTML = '⏳';
 
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
     const langCode = selectedVoice.split('-')[0];
 
-    // --- NEW: Fetch full article content if needed ---
-    if (!article.full_content || article.full_content.length < 500) {
-        console.log('Fetching full article content...');
-        try {
-            const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
-            const result = await res.json();
-            if (result.content && result.content.length > 500) {
-                article.full_content = result.content;
-            } else {
-                console.warn('Full content extraction failed or too short');
-                article.full_content = article.description || article.title || '';
-            }
-        } catch (err) {
-            console.error('Error fetching full article content:', err);
-            article.full_content = article.description || article.title || '';
-        }
-    }
-
-    const rawText = article.full_content || article.content || article.description || article.title || '';
-
-    if (!rawText.trim()) {
-        alert(t.noText);
-        resetAudioUI(listenBtn, loadingUI, progressBar);
-        return;
-    }
-
     try {
-        // Optimize content if needed
-        if (!article.voiceOptimizedContent || article.voiceOptimizedContent.length < 30) {
+        // Get full content efficiently
+        const contentResult = await getFullContent(article);
+        article.full_content = contentResult;
+
+        const rawText = article.full_content || article.content || article.description || article.title || '';
+        if (!rawText.trim()) {
+            alert(t.noText);
+            resetAudioUI(listenBtn, loadingUI, progressBar);
+            return;
+        }
+
+        // Smart optimization - only if not cached
+        let summaryText;
+        if (article.voiceOptimizedContent && article.voiceOptimizedContent.length > 30) {
+            summaryText = article.voiceOptimizedContent;
+        } else {
             const res = await fetch('/api/news/voice-optimize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -528,20 +449,19 @@ async function listenToSummary(index, autoPlay = true) {
             });
             const result = await res.json();
             article.voiceOptimizedContent = result.optimized_content?.trim() || rawText;
+            summaryText = article.voiceOptimizedContent;
         }
-
-        let summaryText = article.voiceOptimizedContent;
 
         // Translate if needed
         if (langCode !== 'en') {
-            const res = await fetch('/api/news/translate', {
+            const translateRes = await fetch('/api/news/translate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: summaryText, target_language: langCode })
             });
-            const result = await res.json();
-            if (result.translated_text?.trim()) {
-                summaryText = result.translated_text.trim();
+            const translateResult = await translateRes.json();
+            if (translateResult.translated_text?.trim()) {
+                summaryText = translateResult.translated_text.trim();
             }
         }
 
@@ -561,9 +481,11 @@ async function listenToSummary(index, autoPlay = true) {
         const result = await ttsRes.json();
 
         if (result.audio_url) {
+            // Cache immediately for next time
             audioCache.set(cacheKey, result.audio_url);
 
-            if (audioCache.size > 20) {
+            // Keep cache manageable
+            if (audioCache.size > 25) {
                 const firstKey = audioCache.keys().next().value;
                 audioCache.delete(firstKey);
             }
@@ -575,16 +497,42 @@ async function listenToSummary(index, autoPlay = true) {
         }
 
     } catch (err) {
-        console.error(err);
+        console.error('Audio generation error:', err);
         alert(t.audioError);
         resetAudioUI(listenBtn, loadingUI, progressBar);
+    }
+}
+
+async function getFullContent(article) {
+    // Return immediately if already have good content
+    if (article.full_content && article.full_content.length > 500) {
+        performanceCache.contentHits++;
+        return article.full_content;
+    }
+
+    try {
+        const startTime = performance.now();
+        const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
+        const result = await res.json();
+        const loadTime = performance.now() - startTime;
+
+        if (result.content && result.content.length > 500) {
+            if (loadTime < 300) performanceCache.contentHits++;
+            else performanceCache.contentMisses++;
+            return result.content;
+        } else {
+            performanceCache.contentMisses++;
+            return article.description || article.title || '';
+        }
+    } catch (err) {
+        performanceCache.contentMisses++;
+        return article.description || article.title || '';
     }
 }
 
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     const t = translations.en;
 
-    // Si un autre audio joue, l’arrêter
     if (activeAudio) {
         activeAudio.pause();
         activeAudio.currentTime = 0;
@@ -596,17 +544,13 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
 
-    // Préparer l’interface
     loadingUI.classList.add('d-none');
     listenBtn.disabled = false;
 
-    // iOS nécessite une interaction utilisateur : instancier l’audio DANS le clic
     if (isIOS || !autoPlay) {
         listenBtn.innerHTML = '🔊 Tap to play';
         listenBtn.onclick = () => {
             activeAudio = new Audio(audioUrl);
-
-            // Ajouter les events une fois l'audio créé
             setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
 
             activeAudio.play().then(() => {
@@ -616,7 +560,6 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
                 alert(t.audioLoadError);
             });
 
-            // Gestion pause/reprise
             listenBtn.onclick = () => {
                 if (activeAudio.paused) {
                     activeAudio.play();
@@ -628,7 +571,6 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
             };
         };
     } else {
-        // Desktop : autoplay autorisé
         activeAudio = new Audio(audioUrl);
         setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
         activeAudio.play().then(() => {
@@ -646,6 +588,7 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
         });
     }
 }
+
 function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     const t = translations.en;
 
@@ -669,51 +612,63 @@ function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     };
 }
 
+function stopActiveAudio() {
+    if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        if (currentPlayButton) {
+            currentPlayButton.innerHTML = '▶︎ ';
+            currentPlayButton.disabled = false;
+        }
 
+        if (currentArticleIndex !== null) {
+            const card = document.querySelector(`.article-listen-btn[data-index="${currentArticleIndex}"]`)?.closest('.card');
+            if (card) {
+                const loadingUI = card.querySelector('.audio-loading');
+                const progressBar = card.querySelector('.audio-progress');
+                if (loadingUI) loadingUI.classList.add('d-none');
+                if (progressBar) progressBar.style.display = 'none';
+            }
+        }
+
+        activeAudio = null;
+        currentPlayButton = null;
+        currentArticleIndex = null;
+    }
+}
 
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
     if (loadingUI) loadingUI.classList.add('d-none');
     if (progressBar) progressBar.style.display = 'none';
     if (listenBtn) {
         listenBtn.disabled = false;
-        listenBtn.innerHTML = '▶︎ '; // Reset to play icon
+        listenBtn.innerHTML = '▶︎ ';
     }
 }
 
-// Function to highlight the currently playing article (optional, but good for UX)
-function highlightCurrentArticle(index) {
-    document.querySelectorAll('.card').forEach(card => {
-        card.classList.remove('border-primary', 'shadow-lg');
-        card.style.transform = '';
-    });
-
-    const currentCard = document.querySelector(`.article-listen-btn[data-index="${index}"]`)?.closest('.card');
-    if (currentCard) {
-        currentCard.classList.add('border-primary', 'shadow-lg');
-        currentCard.style.transform = 'scale(1.02)';
-        currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-}
-// Load comments for one article - FIXED VERSION
+// ==================== OPTIMIZED COMMENT SYSTEM ====================
 function loadComments(articleId, container) {
+    const commentsList = container.querySelector('.comments-list');
+    commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Loading...</p>';
+
     fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
         .then(response => response.json())
         .then(data => {
-            const commentsList = container.querySelector('.comments-list');
             commentsList.innerHTML = '';
 
             if (data.comments && data.comments.length === 0) {
                 commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">No comments yet. Be the first to comment!</p>';
             } else if (data.comments) {
+                // Batch DOM updates for better performance
+                const fragment = document.createDocumentFragment();
+                
                 data.comments.forEach(comment => {
                     const commentEl = document.createElement('div');
                     commentEl.className = 'comment text-start mb-2 px-2';
                     
-                    // Handle timestamp properly
                     let formattedDate = 'Just now';
                     if (comment.timestamp) {
                         try {
-                            // Handle Firestore timestamp format
                             const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
                             formattedDate = date.toLocaleDateString('en-US', { 
                                 month: 'short', 
@@ -731,42 +686,37 @@ function loadComments(articleId, container) {
                         <span class="comment-text text-dark" style="font-size: 0.8em;">${escapeHtml(comment.comment)}</span>
                         <br><small class="text-muted" style="font-size: 0.7em;">${formattedDate}</small>
                     `;
-                    commentsList.appendChild(commentEl);
+                    fragment.appendChild(commentEl);
                 });
+                
+                // Single DOM update
+                commentsList.appendChild(fragment);
             }
         })
         .catch(err => {
             console.error('Error loading comments:', err);
-            const commentsList = container.querySelector('.comments-list');
             commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Error loading comments.</p>';
         });
 }
-// Helper function to escape HTML and prevent XSS
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
-// news.js
 
-// ... (other functions like loadComments, etc. before this)
-
-/// Setup comment form submit - IMPROVED VERSION (without success message)
 function setupCommentForms() {
     document.querySelectorAll('.article-comments').forEach(container => {
         const articleId = container.dataset.articleId;
         const form = container.querySelector('.comment-form');
 
-        // Load comments on page load
+        // Load comments immediately
         loadComments(articleId, container);
 
-        // This removes the old event listener by replacing the form element
-        // with a cloned one. This is a common pattern to avoid duplicate listeners
-        // when dynamically adding/repla
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         
-        newForm.addEventListener('submit', e => {
+        newForm.addEventListener('submit', async e => {
             e.preventDefault();
 
             const nickname = newForm.nickname.value.trim();
@@ -778,85 +728,108 @@ function setupCommentForms() {
                 return;
             }
 
+            // Immediate UI feedback
             submitBtn.disabled = true;
             submitBtn.textContent = 'Posting...';
 
-            // Build payload
             const payload = {
                 article_id: articleId,
                 comment_text: commentText
             };
 
             if (nickname) {
-                payload.nickname = nickname;  // only send if filled
+                payload.nickname = nickname;
             }
 
-            fetch('/api/article-comment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                const response = await fetch('/api/article-comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
                 if (data.error) throw new Error(data.error);
+                
+                // Immediate form reset
                 newForm.reset();
+                
+                // Instant reload of comments
                 loadComments(articleId, container);
-            })
-            .catch(err => {
+                
+            } catch (err) {
                 console.error('Error posting comment:', err);
                 alert('Error posting comment. Please try again.');
-            })
-            .finally(() => {
+            } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Post';
-            });
+            }
         });
     });
 }
-document.getElementById('chatButton').addEventListener('click', function() {
-    const chatBox = document.getElementById('chatBox');
-    chatBox.style.display = chatBox.style.display === 'none' ? 'block' : 'none';
+
+// ==================== NEWSLETTER SYSTEM ====================
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('newsletterForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('newsletterEmail').value.trim();
+            if (!email || !email.includes('@')) {
+                alert('Please enter a valid email address.');
+                return;
+            }
+
+            const categories = [];
+            document.querySelectorAll('#newsletterForm input[type="checkbox"]:checked').forEach(checkbox => {
+                categories.push(checkbox.value);
+            });
+
+            fetch('/api/newsletter-subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    categories: categories
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Subscription failed: ' + data.error);
+                } else {
+                    alert('Thank you for subscribing! 📬');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
+                    modal.hide();
+                    form.reset();
+                }
+            })
+            .catch(err => {
+                console.error('Subscription error:', err);
+                alert('An error occurred. Please try again later.');
+            });
+        });
+    }
 });
 
-// news.js (or wherever your main JS is)
-
-// Toggle chat open/close
+// ==================== CHAT SYSTEM ====================
 const chatButton = document.getElementById('chatButton');
 const chatBox = document.getElementById('chatBox');
 
-chatButton.addEventListener('click', function() {
-    if (chatBox.style.display === 'block') {
-        chatBox.style.display = 'none';
-    } else {
-        chatBox.style.display = 'block';
-    }
-});
+if (chatButton && chatBox) {
+    chatButton.addEventListener('click', function() {
+        chatBox.style.display = chatBox.style.display === 'block' ? 'none' : 'block';
+    });
 
-// Close chat when clicking outside
-document.addEventListener('click', function(event) {
-    if (!chatBox.contains(event.target) && !chatButton.contains(event.target)) {
-        chatBox.style.display = 'none';
-    }
-});
+    document.addEventListener('click', function(event) {
+        if (!chatBox.contains(event.target) && !chatButton.contains(event.target)) {
+            chatBox.style.display = 'none';
+        }
+    });
+}
 
-// Toggle chat open/close when clicking the button
-document.getElementById('chatButton').addEventListener('click', function() {
-    const chatBox = document.getElementById('chatBox');
-    chatBox.style.display = (chatBox.style.display === 'none' || chatBox.style.display === '') ? 'block' : 'none';
-});
-
-// Close chat when clicking outside
-document.addEventListener('click', function(event) {
-    const chatBox = document.getElementById('chatBox');
-    const chatButton = document.getElementById('chatButton');
-
-    // If click is outside chat box and not the button
-    if (!chatBox.contains(event.target) && !chatButton.contains(event.target)) {
-        chatBox.style.display = 'none';
-    }
-});
-
-// Handle question clicks
 document.querySelectorAll('.chat-question').forEach(button => {
     button.addEventListener('click', function() {
         const reply = this.getAttribute('data-reply');
@@ -864,49 +837,133 @@ document.querySelectorAll('.chat-question').forEach(button => {
         const msgDiv = document.createElement('div');
         msgDiv.classList.add('chat-message', 'bot-message');
         msgDiv.innerHTML = `<p>${reply}</p>`;
-        document.getElementById('chatMessages').appendChild(msgDiv);
+        
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
-        document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-
-        // Show feedback box if clicked on support project
         if (reply.toLowerCase().includes('feedback')) {
-            document.getElementById('feedbackBox').style.display = 'flex';
+            const feedbackBox = document.getElementById('feedbackBox');
+            if (feedbackBox) {
+                feedbackBox.style.display = 'flex';
+            }
         }
     });
 });
 
-// Handle feedback submit
-document.getElementById('feedbackSubmit').addEventListener('click', function() {
-    const feedback = document.getElementById('feedbackInput').value.trim();
-    if (feedback) {
-        fetch('/api/feedback', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ feedback: feedback })
-        })
-        .then(response => response.json())
-        .then(data => {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('chat-message', 'bot-message');
+const feedbackSubmit = document.getElementById('feedbackSubmit');
+if (feedbackSubmit) {
+    feedbackSubmit.addEventListener('click', function() {
+        const feedbackInput = document.getElementById('feedbackInput');
+        const feedback = feedbackInput ? feedbackInput.value.trim() : '';
+        
+        if (feedback) {
+            fetch('/api/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ feedback: feedback })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const msgDiv = document.createElement('div');
+                msgDiv.classList.add('chat-message', 'bot-message');
 
-            if (data.message) {
-                msgDiv.innerHTML = `<p>✅ Thanks for your feedback!</p>`;
-            } else {
-                msgDiv.innerHTML = `<p>❌ Failed to send feedback. Please try again later.</p>`;
-            }
+                if (data.message) {
+                    msgDiv.innerHTML = `<p>✅ Thanks for your feedback!</p>`;
+                } else {
+                    msgDiv.innerHTML = `<p>❌ Failed to send feedback. Please try again later.</p>`;
+                }
 
-            document.getElementById('chatMessages').appendChild(msgDiv);
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                    chatMessages.appendChild(msgDiv);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
 
-            // Reset input & hide feedback box
-            document.getElementById('feedbackInput').value = "";
-            document.getElementById('feedbackBox').style.display = 'none';
+                if (feedbackInput) feedbackInput.value = "";
+                const feedbackBox = document.getElementById('feedbackBox');
+                if (feedbackBox) feedbackBox.style.display = 'none';
+            })
+            .catch(err => {
+                console.error('Error submitting feedback:', err);
+            });
+        }
+    });
+}
 
-            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
-        })
-        .catch(err => {
-            console.error('Error submitting feedback:', err);
-        });
+// ==================== PERFORMANCE OPTIMIZATIONS ====================
+
+// Preload content for better performance
+function preloadContent() {
+    articles.slice(0, 3).forEach(article => {
+        if (!article.full_content) {
+            getFullContent(article);
+        }
+    });
+}
+
+// Smart cache management
+function optimizeCache() {
+    if (audioCache.size > 20) {
+        const keysToDelete = Array.from(audioCache.keys()).slice(0, 5);
+        keysToDelete.forEach(key => audioCache.delete(key));
     }
-});
+}
+
+// Performance monitoring
+function trackPerformance() {
+    const total = performanceCache.newsHits + performanceCache.newsMisses + 
+                  performanceCache.contentHits + performanceCache.contentMisses + 
+                  performanceCache.audioHits + performanceCache.audioMisses;
+                  
+    if (total > 0) {
+        const hits = performanceCache.newsHits + performanceCache.contentHits + performanceCache.audioHits;
+        const hitRate = Math.round((hits / total) * 100);
+        
+        if (hitRate > 85) {
+            console.log('⚡ Performance: Excellent (' + hitRate + '% instant)');
+        } else if (hitRate > 60) {
+            console.log('🔄 Performance: Good (' + hitRate + '% instant)');
+        } else {
+            console.log('📡 Performance: Building cache (' + hitRate + '% instant)');
+        }
+    }
+}
+
+// Start optimization routines
+function startOptimizations() {
+    // Run optimizations periodically
+    setInterval(() => {
+        optimizeCache();
+        trackPerformance();
+        preloadContent();
+    }, 30000); // Every 30 seconds
+}
+
+// ==================== PERFORMANCE STATS ====================
+window.getPerformanceStats = function() {
+    const total = performanceCache.newsHits + performanceCache.newsMisses + 
+                  performanceCache.contentHits + performanceCache.contentMisses + 
+                  performanceCache.audioHits + performanceCache.audioMisses;
+                  
+    const hits = performanceCache.newsHits + performanceCache.contentHits + performanceCache.audioHits;
+    const hitRate = total > 0 ? Math.round((hits / total) * 100) : 0;
+    
+    return {
+        cache: performanceCache,
+        audioCache: {
+            size: audioCache.size,
+            keys: Array.from(audioCache.keys()).slice(0, 5)
+        },
+        performance: {
+            hitRate: hitRate,
+            status: hitRate > 85 ? 'Excellent' : hitRate > 60 ? 'Good' : 'Building'
+        }
+    };
+};
+
+console.log('Optimized News Reader loaded - Performance focused!');
