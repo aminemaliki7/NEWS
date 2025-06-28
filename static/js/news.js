@@ -9,16 +9,14 @@ let darkMode = localStorage.getItem('darkMode') === 'true';
 let activeAudio = null;
 let currentPlayButton = null;
 let currentArticleIndex = null;
-let audioCache = new Map();
+let directTTSCache = new Map();
 
 // Performance tracking
 let performanceCache = {
     newsHits: 0,
     newsMisses: 0,
-    contentHits: 0,
-    contentMisses: 0,
-    audioHits: 0,
-    audioMisses: 0
+    directTTSHits: 0,
+    directTTSMisses: 0
 };
 
 // DOM elements
@@ -55,14 +53,24 @@ const translations = {
         darkMode: "Dark Mode",
         lightMode: "Light Mode",
         noDescription: "No description available.",
-        noText: "This article does not contain any usable text.",
-        audioFailed: "Failed to generate audio.",
-        audioError: "An error occurred during voice generation.",
         audioLoadError: "Error loading audio. Please try again.",
         loading: "Loading...",
         error: "An error occurred. Please try again later."
     }
 };
+
+// Utility function for debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
@@ -75,6 +83,22 @@ document.addEventListener('DOMContentLoaded', function() {
     loadNews();
     startOptimizations();
 });
+
+// ==================== FIXED CACHE KEY GENERATION ====================
+function generateDirectTTSCacheKey(article, voiceId) {
+    const description = article.description || '';
+    const title = article.title || '';
+    const url = article.url || '';
+    
+    // Create a more unique identifier for the article
+    const articleHash = btoa(encodeURIComponent(description + title + url)).substring(0, 20);
+    
+    // Include BOTH language code AND full voice ID for maximum uniqueness
+    const langCode = voiceId.split('-')[0];
+    const voiceShort = voiceId.split('-').slice(-1)[0]; // Neural part
+    
+    return `tts-${articleHash}-${langCode}-${voiceShort}-${voiceId}`;
+}
 
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
@@ -103,41 +127,69 @@ function setupEventListeners() {
         if (e.key === 'Enter') document.getElementById('searchBtn').click();
     });
 
-    // Optimized search with faster debounce
+    // Search with debounce
     document.getElementById('searchQuery').addEventListener('input', debounce(() => {
         currentQuery = document.getElementById('searchQuery').value;
         loadNews();
     }, 400));
 
-    // Voice selection changes
+    // FIXED: Voice selection changes - IMMEDIATE STOP and REGENERATE
     document.addEventListener('change', function(e) {
         if (e.target.classList.contains('voice-select')) {
             const articleIndex = parseInt(e.target.dataset.articleIndex);
             const newVoice = e.target.value;
+            const oldVoice = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural';
+            
+            console.log(`🔄 Voice changed for article ${articleIndex}: ${oldVoice} → ${newVoice}`);
+            
+            // Update stored voice preference
             localStorage.setItem('lastVoice', newVoice);
 
-            // Immediate cache invalidation
-            const cacheKey = `${articleIndex}-${newVoice}`;
-            audioCache.delete(cacheKey);
-
-            // Instant regeneration if currently playing
-            if (currentArticleIndex === articleIndex) {
-                const wasPlaying = activeAudio && !activeAudio.paused;
+            // STEP 1: IMMEDIATELY STOP current audio if it's playing
+            if (activeAudio && currentArticleIndex === articleIndex) {
+                console.log(`⏹️ STOPPING current audio for article ${articleIndex}`);
                 stopActiveAudio();
-                if (wasPlaying) {
-                    listenToSummary(articleIndex, true);
-                }
             }
+
+            // STEP 2: AGGRESSIVE CACHE CLEARING
+            const article = articles[articleIndex];
+            if (article) {
+                console.log(`🗑️ Clearing ALL cache entries for article ${articleIndex}`);
+                
+                // Clear cache for both old and new voices
+                const oldCacheKey = generateDirectTTSCacheKey(article, oldVoice);
+                const newCacheKey = generateDirectTTSCacheKey(article, newVoice);
+                
+                directTTSCache.delete(oldCacheKey);
+                directTTSCache.delete(newCacheKey);
+                
+                // Clear ANY cache entries that might match this article
+                const articleIdentifier = btoa(encodeURIComponent((article.description || '') + (article.title || '') + (article.url || ''))).substring(0, 20);
+                
+                // Remove ALL cache entries for this article regardless of voice
+                for (let [key, value] of directTTSCache.entries()) {
+                    if (key.includes(articleIdentifier)) {
+                        console.log(`🗑️ Removing cache entry: ${key}`);
+                        directTTSCache.delete(key);
+                    }
+                }
+                
+                console.log(`✅ Cache cleared. Remaining entries: ${directTTSCache.size}`);
+            }
+
+            // STEP 3: Reset button to initial state
+            const listenBtn = document.querySelector(`.article-listen-btn[data-index="${articleIndex}"]`);
+            if (listenBtn) {
+                listenBtn.innerHTML = '▶︎';
+                listenBtn.disabled = false;
+                
+                // Reset the onclick handler to ensure fresh generation
+                listenBtn.onclick = () => generateDirectTTS(articleIndex);
+            }
+
+            console.log(`✅ Voice change completed for article ${articleIndex}`);
         }
     });
-}
-
-function debounce(fn, delay) {
-    let timeout;
-    return (...args) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => fn.apply(this, args), delay);
-    };
 }
 
 // ==================== THEME MANAGEMENT ====================
@@ -253,7 +305,7 @@ function hideStates() {
     errorState.classList.add('d-none');
 }
 
-// ==================== OPTIMIZED NEWS LOADING ====================
+// ==================== NEWS LOADING ====================
 async function loadNews() {
     showLoading();
     const startTime = performance.now();
@@ -283,9 +335,6 @@ async function loadNews() {
         displayNews(articles);
         setupCommentForms();
         hideStates();
-        
-        // Preload content for better performance
-        preloadContent();
         
     } catch (error) {
         console.error('Error loading news:', error);
@@ -337,17 +386,19 @@ function createArticleElement(article, index, isLastArticle = false) {
     readBtn.href = article.url;
     readBtn.title = t.readFull;
 
+    // SIMPLE: Single triangle button
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
-    listenBtn.innerHTML = '▶︎ ';
+    listenBtn.innerHTML = '▶︎';
     listenBtn.title = t.listen;
-    listenBtn.onclick = () => listenToSummary(index);
+    listenBtn.onclick = () => generateDirectTTS(index);
 
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
     voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural';
 
+    // KEEP ONLY the main progress bar
     const progress = template.querySelector('.audio-progress');
     progress.style.display = 'none';
     progress.value = 0;
@@ -373,225 +424,242 @@ function formatDate(dateString) {
     return date.toLocaleDateString('en-US');
 }
 
-// ==================== OPTIMIZED AUDIO GENERATION ====================
-async function listenToSummary(index, autoPlay = true) {
+// ==================== ENHANCED GENERATETTS FUNCTION ====================
+async function generateDirectTTS(index) {
     const article = articles[index];
     const voiceSelect = document.getElementById(`voice-select-${index}`);
-    const selectedVoice = voiceSelect?.value;
+    const selectedVoice = voiceSelect?.value || 'en-CA-LiamNeural';
     const listenBtn = document.querySelector(`.article-listen-btn[data-index="${index}"]`);
-    const card = listenBtn.closest('.card');
-    const loadingUI = card.querySelector('.audio-loading');
-    const progressBar = card.querySelector('.audio-progress');
-    const t = translations.en;
+    const card = listenBtn?.closest('.card');
+    const progressBar = card?.querySelector('.audio-progress');
 
-    if (!article || !selectedVoice || !listenBtn) return;
+    console.log(`🎵 Starting TTS generation for article ${index} with voice: ${selectedVoice}`);
 
-    // Stop other audio
-    if (activeAudio && currentArticleIndex !== index) {
-        stopActiveAudio();
-    }
-
-    // Handle play/pause for same article
-    if (activeAudio && currentArticleIndex === index) {
-        if (activeAudio.paused) {
-            activeAudio.play();
-            listenBtn.innerHTML = '‖';
-        } else {
-            activeAudio.pause();
-            listenBtn.innerHTML = '▶︎';
-        }
+    if (!article || !selectedVoice || !listenBtn) {
+        console.error('❌ Missing required elements:', { 
+            article: !!article, 
+            selectedVoice, 
+            listenBtn: !!listenBtn 
+        });
         return;
     }
 
-    // Check cache first for instant playback
-    const cacheKey = `${index}-${selectedVoice}`;
-    const cachedAudioUrl = audioCache.get(cacheKey);
-
-    if (cachedAudioUrl) {
-        performanceCache.audioHits++;
-        playAudio(cachedAudioUrl, index, listenBtn, loadingUI, progressBar, autoPlay);
+    // Validate description
+    if (!article.description || article.description.trim().length < 10) {
+        console.warn(`⚠️ Description too short for article ${index}`);
+        showNotification('Article description is too short for audio generation.', 'warning');
+        listenBtn.innerHTML = '▶︎';
+        listenBtn.disabled = false;
         return;
     }
 
-    performanceCache.audioMisses++;
-    stopActiveAudio();
-    currentArticleIndex = index;
+    // Generate cache key with current voice
+    const cacheKey = generateDirectTTSCacheKey(article, selectedVoice);
+    console.log(`🔑 Generated cache key: ${cacheKey}`);
+    
+    // Check cache ONLY if we're not forcing regeneration
+    const cachedResult = directTTSCache.get(cacheKey);
+    
+    if (cachedResult) {
+        console.log(`🎯 Using cached audio for article ${index} with voice ${selectedVoice}`);
+        performanceCache.directTTSHits++;
+        playAudio(cachedResult, index, listenBtn, progressBar);
+        return;
+    }
 
-    loadingUI.classList.remove('d-none');
-    progressBar.style.display = 'block';
-    progressBar.value = 0;
-    listenBtn.disabled = true;
+    console.log(`🔄 No cache hit. Generating new audio for article ${index} in ${selectedVoice}`);
+    performanceCache.directTTSMisses++;
+
+    // Show loading state
     listenBtn.innerHTML = '⏳';
-
-    const langCode = selectedVoice.split('-')[0];
+    listenBtn.disabled = true;
 
     try {
-        // Get full content efficiently
-        const contentResult = await getFullContent(article);
-        article.full_content = contentResult;
+        // Process and clean text
+        let optimizedText = article.description.trim();
+        
+        // Enhanced cleanup
+        optimizedText = optimizedText
+            .replace(/Read more.*$/i, '')
+            .replace(/Continue reading.*$/i, '')
+            .replace(/Click here.*$/i, '')
+            .replace(/Subscribe.*$/i, '')
+            .replace(/Follow us.*$/i, '')
+            .replace(/\[.*?\]/g, '')
+            .replace(/\(Image:.*?\)/g, '')
+            .replace(/\(Photo:.*?\)/g, '')
+            .replace(/Source:.*$/i, '');
 
-        const rawText = article.full_content || article.content || article.description || article.title || '';
-        if (!rawText.trim()) {
-            alert(t.noText);
-            resetAudioUI(listenBtn, loadingUI, progressBar);
-            return;
+        // Voice-friendly replacements
+        const voiceFixes = {
+            'FBI': 'F-B-I', 'CIA': 'C-I-A', 'CEO': 'C-E-O', 'AI': 'A-I',
+            'US': 'U-S', 'USA': 'U-S-A', 'UK': 'U-K', 'EU': 'E-U',
+            'NASA': 'N-A-S-A', 'WHO': 'W-H-O', 'GDP': 'G-D-P',
+            'NYC': 'New York City', 'LA': 'Los Angeles', 'IPO': 'I-P-O',
+            'CFO': 'C-F-O', 'CTO': 'C-T-O', 'VP': 'Vice President'
+        };
+        
+        for (const [acronym, voiceForm] of Object.entries(voiceFixes)) {
+            const regex = new RegExp(`\\b${acronym}\\b`, 'g');
+            optimizedText = optimizedText.replace(regex, voiceForm);
         }
 
-        // Smart optimization - only if not cached
-        let summaryText;
-        if (article.voiceOptimizedContent && article.voiceOptimizedContent.length > 30) {
-            summaryText = article.voiceOptimizedContent;
-        } else {
-            const res = await fetch('/api/news/voice-optimize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: rawText, title: article.title })
-            });
-            const result = await res.json();
-            article.voiceOptimizedContent = result.optimized_content?.trim() || rawText;
-            summaryText = article.voiceOptimizedContent;
+        // Format numbers and currency
+        optimizedText = optimizedText
+            .replace(/(\d+)%/g, '$1 percent')
+            .replace(/\$(\d+(?:,\d{3})*)B\b/g, '$1 billion dollars')
+            .replace(/\$(\d+(?:,\d{3})*)M\b/g, '$1 million dollars')
+            .replace(/\$(\d+(?:,\d{3})*)K\b/g, '$1 thousand dollars');
+
+        // Add context from title if description is short
+        if (optimizedText.split(' ').length < 8 && article.title) {
+            const cleanTitle = article.title.trim().replace(/\.$/, '');
+            optimizedText = `${cleanTitle}. ${optimizedText}`;
         }
 
-        // Translate if needed
+        // Language detection and translation
+        const langCode = selectedVoice.split('-')[0];
+        console.log(`🌍 Target language: ${langCode}`);
+        
         if (langCode !== 'en') {
-            const translateRes = await fetch('/api/news/translate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: summaryText, target_language: langCode })
-            });
-            const translateResult = await translateRes.json();
-            if (translateResult.translated_text?.trim()) {
-                summaryText = translateResult.translated_text.trim();
+            console.log(`📝 Translating text to ${langCode}...`);
+            try {
+                const translateRes = await fetch('/api/news/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text: optimizedText, 
+                        target_language: langCode 
+                    })
+                });
+                
+                if (translateRes.ok) {
+                    const translateResult = await translateRes.json();
+                    if (translateResult.translated_text?.trim()) {
+                        optimizedText = translateResult.translated_text.trim();
+                        console.log(`✅ Translation successful: ${optimizedText.substring(0, 50)}...`);
+                    }
+                } else {
+                    console.warn('❌ Translation API failed, using original text');
+                }
+            } catch (translateError) {
+                console.error('❌ Translation error:', translateError);
+                showNotification('Translation failed, using original text', 'warning');
             }
         }
 
-        // Generate TTS
-        const ttsRes = await fetch('/api/news/summary-audio', {
+        // Ensure proper sentence ending
+        if (!optimizedText.match(/[.!?]$/)) {
+            optimizedText += '.';
+        }
+
+        // Clean for TTS (remove problematic characters)
+        optimizedText = optimizedText
+            .replace(/[^\w\s.,!?;:\-\'\"()]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        console.log(`🎙️ Final text for TTS (${optimizedText.length} chars): ${optimizedText.substring(0, 100)}...`);
+
+        // Generate TTS with unique timestamp to prevent caching issues
+        const response = await fetch('/api/news/summary-audio', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
             body: JSON.stringify({
-                content: summaryText,
-                title: article.title,
+                content: optimizedText,
                 voice_id: selectedVoice,
                 speed: 1.0,
-                depth: 1
+                depth: 1,
+                timestamp: Date.now() // Force unique request
             })
         });
 
-        const result = await ttsRes.json();
-
-        if (result.audio_url) {
-            // Cache immediately for next time
-            audioCache.set(cacheKey, result.audio_url);
-
-            // Keep cache manageable
-            if (audioCache.size > 25) {
-                const firstKey = audioCache.keys().next().value;
-                audioCache.delete(firstKey);
-            }
-
-            playAudio(result.audio_url, index, listenBtn, loadingUI, progressBar, autoPlay);
-        } else {
-            alert(t.audioFailed);
-            resetAudioUI(listenBtn, loadingUI, progressBar);
+        if (!response.ok) {
+            throw new Error(`TTS API returned ${response.status}: ${response.statusText}`);
         }
 
-    } catch (err) {
-        console.error('Audio generation error:', err);
-        alert(t.audioError);
-        resetAudioUI(listenBtn, loadingUI, progressBar);
+        const data = await response.json();
+
+        if (data.error) {
+            console.error(`❌ TTS API error:`, data.error);
+            showNotification(data.error, 'danger');
+            listenBtn.innerHTML = '▶︎';
+            listenBtn.disabled = false;
+            return;
+        }
+
+        if (!data.audio_url) {
+            throw new Error('No audio URL received from TTS API');
+        }
+
+        // Create result with unique audio URL (add timestamp to prevent browser caching)
+        const audioUrl = `${data.audio_url}?t=${Date.now()}`;
+        const result = { 
+            audio_url: audioUrl,
+            text_used: optimizedText,
+            voice_used: selectedVoice,
+            generated_at: Date.now()
+        };
+
+        // Cache the new result
+        directTTSCache.set(cacheKey, result);
+        console.log(`💾 Cached new audio with key: ${cacheKey}`);
+        console.log(`📊 Cache now contains ${directTTSCache.size} entries`);
+        
+        // AUTOMATICALLY play the newly generated audio
+        playAudio(result, index, listenBtn, progressBar);
+
+    } catch (error) {
+        console.error('❌ TTS generation error:', error);
+        showNotification(`Failed to generate audio: ${error.message}`, 'danger');
+        listenBtn.innerHTML = '▶︎';
+        listenBtn.disabled = false;
     }
 }
 
-async function getFullContent(article) {
-    // Return immediately if already have good content
-    if (article.full_content && article.full_content.length > 500) {
-        performanceCache.contentHits++;
-        return article.full_content;
-    }
-
-    try {
-        const startTime = performance.now();
-        const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
-        const result = await res.json();
-        const loadTime = performance.now() - startTime;
-
-        if (result.content && result.content.length > 500) {
-            if (loadTime < 300) performanceCache.contentHits++;
-            else performanceCache.contentMisses++;
-            return result.content;
-        } else {
-            performanceCache.contentMisses++;
-            return article.description || article.title || '';
-        }
-    } catch (err) {
-        performanceCache.contentMisses++;
-        return article.description || article.title || '';
-    }
-}
-
-function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
-    const t = translations.en;
-
+function playAudio(data, index, button, progressBar) {
+    console.log(`▶️ Playing audio for article ${index}`);
+    
+    // Clean up any previous audio
     if (activeAudio) {
         activeAudio.pause();
-        activeAudio.currentTime = 0;
-        resetAudioUI(currentPlayButton, null, null);
+        if (currentPlayButton && currentPlayButton !== button) {
+            currentPlayButton.innerHTML = '▶︎';
+            currentPlayButton.disabled = false;
+        }
     }
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-    currentPlayButton = listenBtn;
+    // Set up new audio
+    currentPlayButton = button;
     currentArticleIndex = index;
 
-    loadingUI.classList.add('d-none');
-    listenBtn.disabled = false;
+    const audio = new Audio(data.audio_url);
+    activeAudio = audio;
 
-    if (isIOS || !autoPlay) {
-        listenBtn.innerHTML = '🔊 Tap to play';
-        listenBtn.onclick = () => {
-            activeAudio = new Audio(audioUrl);
-            setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
-
-            activeAudio.play().then(() => {
-                listenBtn.innerHTML = '‖';
-            }).catch(err => {
-                console.error('Playback error:', err);
-                alert(t.audioLoadError);
-            });
-
-            listenBtn.onclick = () => {
-                if (activeAudio.paused) {
-                    activeAudio.play();
-                    listenBtn.innerHTML = '‖';
-                } else {
-                    activeAudio.pause();
-                    listenBtn.innerHTML = '▶︎';
-                }
-            };
-        };
-    } else {
-        activeAudio = new Audio(audioUrl);
-        setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
-        activeAudio.play().then(() => {
-            listenBtn.innerHTML = '‖';
-        }).catch(err => {
-            console.warn('Autoplay blocked, switching to manual:', err);
-            listenBtn.innerHTML = '🔊 Tap to play';
-            listenBtn.onclick = () => {
-                activeAudio.play().then(() => {
-                    listenBtn.innerHTML = '‖';
-                }).catch(err => {
-                    alert(t.audioLoadError);
-                });
-            };
-        });
+    // Show progress bar
+    if (progressBar) {
+        progressBar.style.display = 'block';
+        progressBar.value = 0;
     }
-}
 
-function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
-    const t = translations.en;
+    // Set up audio events
+    audio.onloadeddata = () => {
+        console.log(`🎵 Audio loaded for article ${index}, starting playback`);
+        button.innerHTML = '‖';
+        button.disabled = false;
+        
+        // AUTOMATICALLY start playing
+        audio.play().catch(err => {
+            console.warn('Autoplay blocked:', err);
+            button.innerHTML = '▶︎';
+            showNotification('Click play to start audio', 'info');
+        });
+    };
 
+    // Update progress
     audio.ontimeupdate = () => {
         if (progressBar && audio.duration) {
             progressBar.value = (audio.currentTime / audio.duration) * 100;
@@ -599,7 +667,9 @@ function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     };
 
     audio.onended = () => {
-        resetAudioUI(listenBtn, loadingUI, progressBar);
+        console.log(`🏁 Audio ended for article ${index}`);
+        button.innerHTML = '▶︎';
+        if (progressBar) progressBar.style.display = 'none';
         activeAudio = null;
         currentPlayButton = null;
         currentArticleIndex = null;
@@ -607,46 +677,84 @@ function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
 
     audio.onerror = () => {
         console.error("Audio error:", audio.error);
-        alert(t.audioLoadError);
-        resetAudioUI(listenBtn, loadingUI, progressBar);
+        showNotification('Error loading audio. Please try again.', 'danger');
+        button.innerHTML = '▶︎';
+        if (progressBar) progressBar.style.display = 'none';
+    };
+
+    // Set up play/pause click handler
+    button.onclick = () => {
+        if (audio.paused) {
+            console.log(`▶️ Resuming audio for article ${index}`);
+            audio.play();
+            button.innerHTML = '‖';
+        } else {
+            console.log(`⏸️ Pausing audio for article ${index}`);
+            audio.pause();
+            button.innerHTML = '▶︎';
+        }
     };
 }
 
 function stopActiveAudio() {
     if (activeAudio) {
+        console.log(`⏹️ Stopping active audio for article ${currentArticleIndex}`);
+        
+        // Stop and cleanup audio
         activeAudio.pause();
         activeAudio.currentTime = 0;
+        activeAudio = null;
+        
+        // Reset button state
         if (currentPlayButton) {
-            currentPlayButton.innerHTML = '▶︎ ';
+            currentPlayButton.innerHTML = '▶︎';
             currentPlayButton.disabled = false;
+            currentPlayButton.onclick = () => generateDirectTTS(parseInt(currentPlayButton.dataset.index));
         }
 
+        // Hide progress bar
         if (currentArticleIndex !== null) {
             const card = document.querySelector(`.article-listen-btn[data-index="${currentArticleIndex}"]`)?.closest('.card');
             if (card) {
-                const loadingUI = card.querySelector('.audio-loading');
                 const progressBar = card.querySelector('.audio-progress');
-                if (loadingUI) loadingUI.classList.add('d-none');
-                if (progressBar) progressBar.style.display = 'none';
+                if (progressBar) {
+                    progressBar.style.display = 'none';
+                    progressBar.value = 0;
+                }
             }
         }
 
-        activeAudio = null;
+        // Reset global state
         currentPlayButton = null;
         currentArticleIndex = null;
     }
 }
 
-function resetAudioUI(listenBtn, loadingUI, progressBar) {
-    if (loadingUI) loadingUI.classList.add('d-none');
-    if (progressBar) progressBar.style.display = 'none';
-    if (listenBtn) {
-        listenBtn.disabled = false;
-        listenBtn.innerHTML = '▶︎ ';
-    }
+// ==================== ENHANCED NOTIFICATION SYSTEM ====================
+function showNotification(message, type = 'info') {
+    // Remove any existing notifications of the same type
+    document.querySelectorAll(`.alert-${type}.position-fixed`).forEach(el => el.remove());
+    
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 400px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 150);
+        }
+    }, 4000);
 }
 
-// ==================== OPTIMIZED COMMENT SYSTEM ====================
+// ==================== COMMENT SYSTEM ====================
 function loadComments(articleId, container) {
     const commentsList = container.querySelector('.comments-list');
     commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Loading...</p>';
@@ -659,7 +767,6 @@ function loadComments(articleId, container) {
             if (data.comments && data.comments.length === 0) {
                 commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">No comments yet. Be the first to comment!</p>';
             } else if (data.comments) {
-                // Batch DOM updates for better performance
                 const fragment = document.createDocumentFragment();
                 
                 data.comments.forEach(comment => {
@@ -689,7 +796,6 @@ function loadComments(articleId, container) {
                     fragment.appendChild(commentEl);
                 });
                 
-                // Single DOM update
                 commentsList.appendChild(fragment);
             }
         })
@@ -710,7 +816,6 @@ function setupCommentForms() {
         const articleId = container.dataset.articleId;
         const form = container.querySelector('.comment-form');
 
-        // Load comments immediately
         loadComments(articleId, container);
 
         const newForm = form.cloneNode(true);
@@ -728,7 +833,6 @@ function setupCommentForms() {
                 return;
             }
 
-            // Immediate UI feedback
             submitBtn.disabled = true;
             submitBtn.textContent = 'Posting...';
 
@@ -752,10 +856,7 @@ function setupCommentForms() {
                 
                 if (data.error) throw new Error(data.error);
                 
-                // Immediate form reset
                 newForm.reset();
-                
-                // Instant reload of comments
                 loadComments(articleId, container);
                 
             } catch (err) {
@@ -897,31 +998,20 @@ if (feedbackSubmit) {
 
 // ==================== PERFORMANCE OPTIMIZATIONS ====================
 
-// Preload content for better performance
-function preloadContent() {
-    articles.slice(0, 3).forEach(article => {
-        if (!article.full_content) {
-            getFullContent(article);
-        }
-    });
-}
-
-// Smart cache management
 function optimizeCache() {
-    if (audioCache.size > 20) {
-        const keysToDelete = Array.from(audioCache.keys()).slice(0, 5);
-        keysToDelete.forEach(key => audioCache.delete(key));
+    // Keep cache size manageable
+    if (directTTSCache.size > 25) {
+        const keysToDelete = Array.from(directTTSCache.keys()).slice(0, 5);
+        keysToDelete.forEach(key => directTTSCache.delete(key));
     }
 }
 
-// Performance monitoring
 function trackPerformance() {
     const total = performanceCache.newsHits + performanceCache.newsMisses + 
-                  performanceCache.contentHits + performanceCache.contentMisses + 
-                  performanceCache.audioHits + performanceCache.audioMisses;
+                  performanceCache.directTTSHits + performanceCache.directTTSMisses;
                   
     if (total > 0) {
-        const hits = performanceCache.newsHits + performanceCache.contentHits + performanceCache.audioHits;
+        const hits = performanceCache.newsHits + performanceCache.directTTSHits;
         const hitRate = Math.round((hits / total) * 100);
         
         if (hitRate > 85) {
@@ -934,30 +1024,30 @@ function trackPerformance() {
     }
 }
 
-// Start optimization routines
 function startOptimizations() {
-    // Run optimizations periodically
+    // Run optimizations every 30 seconds
     setInterval(() => {
         optimizeCache();
         trackPerformance();
-        preloadContent();
-    }, 30000); // Every 30 seconds
+    }, 30000);
 }
 
 // ==================== PERFORMANCE STATS ====================
 window.getPerformanceStats = function() {
     const total = performanceCache.newsHits + performanceCache.newsMisses + 
-                  performanceCache.contentHits + performanceCache.contentMisses + 
-                  performanceCache.audioHits + performanceCache.audioMisses;
+                  performanceCache.directTTSHits + performanceCache.directTTSMisses;
                   
-    const hits = performanceCache.newsHits + performanceCache.contentHits + performanceCache.audioHits;
+    const hits = performanceCache.newsHits + performanceCache.directTTSHits;
     const hitRate = total > 0 ? Math.round((hits / total) * 100) : 0;
+    
+    const directTTSTotal = performanceCache.directTTSHits + performanceCache.directTTSMisses;
+    const directTTSHitRate = directTTSTotal > 0 ? Math.round((performanceCache.directTTSHits / directTTSTotal) * 100) : 0;
     
     return {
         cache: performanceCache,
-        audioCache: {
-            size: audioCache.size,
-            keys: Array.from(audioCache.keys()).slice(0, 5)
+        directTTSCache: {
+            size: directTTSCache.size,
+            hitRate: directTTSHitRate
         },
         performance: {
             hitRate: hitRate,
@@ -966,4 +1056,33 @@ window.getPerformanceStats = function() {
     };
 };
 
-console.log('Optimized News Reader loaded - Performance focused!');
+// ==================== DEBUGGING HELPER ====================
+window.debugTTSCache = function(articleIndex) {
+    if (articleIndex !== undefined) {
+        const article = articles[articleIndex];
+        if (article) {
+            console.log(`🔍 Debug info for article ${articleIndex}:`);
+            console.log('Article:', article);
+            
+            // Show all cache keys for this article
+            const articleIdentifier = btoa(encodeURIComponent((article.description || '') + (article.title || '') + (article.url || ''))).substring(0, 20);
+            console.log('Article identifier:', articleIdentifier);
+            
+            const matchingKeys = [];
+            for (let key of directTTSCache.keys()) {
+                if (key.includes(articleIdentifier)) {
+                    matchingKeys.push(key);
+                }
+            }
+            console.log('Matching cache keys:', matchingKeys);
+        }
+    } else {
+        console.log('🔍 All TTS cache entries:');
+        console.log('Cache size:', directTTSCache.size);
+        for (let [key, value] of directTTSCache.entries()) {
+            console.log(`${key}:`, value);
+        }
+    }
+};
+
+console.log('🚀 Fixed News Reader loaded - Language switching now works perfectly!');

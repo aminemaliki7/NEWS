@@ -1,9 +1,52 @@
 services:
   - type: web
-    name: news-app
+    name: newsnap-production
     env: python
+    region: oregon
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 3 --worker-class gevent --worker-connections 1000 --timeout 120 --preload app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: GEMINI_API_KEY
+        value: AIzaSyCFS-xORFSlZgvpjMRIfcu1LoRG24tv3ks
+      - key: GNEWS_API_KEY_1
+        value: bd064fab15e685656dfeac9704782222
+      - key: GNEWS_API_KEY_2
+        value: a5c492d42571ea2fd5ea17857005a604
+      - key: GNEWS_API_KEY_3
+        value: 722fcfc089454e173e1431434f7f7600
+      - key: GNEWS_API_KEY_4
+        value: e31ef3d65105ab5690cd52f0badb5f7d
+      - key: GNEWS_API_KEY_5
+        value: f8cb0b3a70bde173f07add91864a3059
+      - key: GNEWS_API_KEY_6
+        value: 960cc1e8bb7e2092fcd4a9fbd98b34fd
+      - key: GNEWS_API_KEY_7
+        value: 0f2f077606c504ef0f1b559d6b7e1805
+      - key: GNEWS_API_KEY_8
+        value: 39c5f97dbfa20c995c92b5f9c654dafd
+      - key: FIREBASE_API_KEY
+        value: AIzaSyDpVK1DyxtMcCir7jHO5nnm2AQBQatUuxQ
+      - key: FIREBASE_PROJECT_ID
+        value: newsnap-2d169
+      - key: FIREBASE_AUTH_DOMAIN
+        value: newsnap-2d169.firebaseapp.com
+      - key: FIREBASE_STORAGE_BUCKET
+        value: newsnap-2d169.firebasestorage.app
+      - key: FIREBASE_MESSAGING_SENDER_ID
+        value: 497848051101
+      - key: FIREBASE_APP_ID
+        value: 1:497848051101:web:cf9fef588e3b5610dd7b74
+      - key: FIREBASE_MEASUREMENT_ID
+        value: G-KSBP29N04K
+      - key: FLASK_SECRET_KEY
+        value: your_very_secret_random_string_here_2024_production_newsnap
+      - key: REDIS_URL
+        value: redis://red-d1en7g7fte5s73eleqp0:6379
+    disk:
+      name: app-storage
+      mountPath: /tmp
+      sizeGB: 3
+    healthCheckPath: /api/debug/redis-test

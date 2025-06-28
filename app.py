@@ -5,6 +5,7 @@ import time
 import json
 import threading
 import uuid
+import re
 from flask import Flask, Response, request, render_template, redirect, url_for, send_file, jsonify, session
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -155,6 +156,257 @@ def log_cache_performance():
         stats = redis_client.get_cache_stats()
         if stats and 'hit_rate' in stats:
             app.logger.info(f"Cache Performance - Hit Rate: {stats['hit_rate']}%, Memory: {stats.get('used_memory_human', 'N/A')}")
+
+# ==================== NEW OPTIMIZED DESCRIPTION PROCESSING ====================
+
+def optimize_description_for_voice(description, title=""):
+    """Lightweight optimization for article descriptions - no AI needed"""
+    
+    if not description:
+        return "No description available."
+    
+    text = description.strip()
+    
+    # Remove common description artifacts
+    cleanup_patterns = [
+        r'Read more.*$',
+        r'Continue reading.*$', 
+        r'Click here.*$',
+        r'Subscribe.*$',
+        r'Follow us.*$',
+        r'\[.*?\]',  # Remove bracketed text
+        r'\(Image:.*?\)',  # Remove image captions
+        r'\(Photo:.*?\)',  # Remove photo captions
+        r'Source:.*$',  # Remove source attributions
+    ]
+    
+    for pattern in cleanup_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # Voice-friendly replacements
+    voice_fixes = {
+        'FBI': 'F-B-I', 'CIA': 'C-I-A', 'CEO': 'C-E-O', 'AI': 'A-I',
+        'US': 'U-S', 'USA': 'U-S-A', 'UK': 'U-K', 'EU': 'E-U',
+        'NASA': 'N-A-S-A', 'WHO': 'W-H-O', 'GDP': 'G-D-P',
+        'NYC': 'New York City', 'LA': 'Los Angeles', 'IPO': 'I-P-O',
+        'CFO': 'C-F-O', 'CTO': 'C-T-O', 'VP': 'Vice President'
+    }
+    
+    for acronym, voice_form in voice_fixes.items():
+        text = re.sub(rf'\b{acronym}\b', voice_form, text)
+    
+    # Optimize numbers for voice
+    text = re.sub(r'(\d+)%', r'\1 percent', text)
+    text = re.sub(r'\$(\d+(?:,\d{3})*)B\b', r'\1 billion dollars', text)
+    text = re.sub(r'\$(\d+(?:,\d{3})*)M\b', r'\1 million dollars', text)
+    text = re.sub(r'\$(\d+(?:,\d{3})*)K\b', r'\1 thousand dollars', text)
+    
+    # Add context from title if description is very short
+    if len(text.split()) < 8 and title:
+        clean_title = title.strip().rstrip('.')
+        text = f"{clean_title}. {text}"
+    
+    # Ensure proper ending
+    if not text.rstrip().endswith(('.', '!', '?')):
+        text = text.rstrip() + '.'
+    
+    # Clean for EdgeTTS (remove problematic characters)
+    text = re.sub(r'[^\w\s.,!?;:\-\'\"()]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+# ==================== NEW OPTIMIZED API ROUTES ====================
+
+@app.route('/api/news/direct-tts', methods=['POST'])
+def direct_description_to_tts():
+    """Generate TTS audio directly from article description - OPTIMIZED"""
+    data = request.json
+    
+    # Get article data
+    article = data.get("article", {})
+    voice_id = data.get("voice_id", "en-CA-LiamNeural")
+    speed = float(data.get("speed", 1.0))
+    depth = int(data.get("depth", 1))
+    
+    # Extract description and title
+    description = article.get("description", "").strip()
+    title = article.get("title", "").strip()
+    url = article.get("url", "")
+    
+    if not description:
+        return jsonify({"error": "No description available for this article"}), 400
+
+    try:
+        # 🚀 STEP 1: Optimize description for voice (lightweight process)
+        optimized_text = optimize_description_for_voice(description, title)
+        
+        # 🎯 STEP 2: Check if we already have this audio cached
+        if REDIS_AVAILABLE:
+            cached_result = redis_client.get_cached_description_tts(
+                description, voice_id, speed, depth
+            )
+            if cached_result:
+                app.logger.info("🎯 Direct TTS Cache HIT!")
+                return jsonify({
+                    "audio_url": cached_result["audio_url"],
+                    "text_used": cached_result["text_used"],
+                    "word_count": cached_result["word_count"],
+                    "estimated_duration": cached_result["estimated_duration"],
+                    "processing_method": "cached_direct_description",
+                    "cache_hit": True
+                })
+        
+        # 📝 STEP 3: Generate TTS audio using existing system
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w', encoding='utf-8') as temp:
+            temp.write(optimized_text)
+            script_path = temp.name
+
+        # Create output file
+        timestamp = int(time.time())
+        output_filename = f"direct_news_{timestamp}_{voice_id.replace('-', '_')}.mp3"
+        output_audio = os.path.join("static/audio", output_filename)
+        
+        # Ensure static/audio directory exists
+        os.makedirs("static/audio", exist_ok=True)
+
+        # 🎵 STEP 4: Generate audio using existing TTS function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(
+                generate_simple_tts(script_path, output_audio, voice_id, speed, depth)
+            )
+        finally:
+            loop.close()
+            # Cleanup temp file
+            try:
+                os.unlink(script_path)
+            except:
+                pass
+
+        # Calculate metrics
+        word_count = len(optimized_text.split())
+        duration = word_count * 0.6  # ~0.6 seconds per word
+        
+        result = {
+            "audio_url": f"/static/audio/{output_filename}",
+            "text_used": optimized_text,
+            "word_count": word_count,
+            "estimated_duration": f"{duration:.1f}s",
+            "processing_method": "direct_description",
+            "cache_hit": False
+        }
+        
+        # 💾 STEP 5: Cache the result for future requests
+        if REDIS_AVAILABLE:
+            redis_client.cache_description_tts(
+                description, voice_id, speed, depth, result
+            )
+        
+        app.logger.info(f"✅ Direct TTS generated: {word_count} words, ~{duration:.1f}s")
+        return jsonify(result)
+
+    except Exception as e:
+        app.logger.error(f"Direct TTS error: {e}")
+        return jsonify({"error": "Failed to generate audio. Please try again."}), 500
+
+@app.route('/api/news/batch-direct-tts', methods=['POST'])
+def batch_direct_tts():
+    """Generate TTS for multiple articles using descriptions - BATCH OPTIMIZED"""
+    data = request.json
+    
+    articles = data.get("articles", [])
+    voice_id = data.get("voice_id", "en-CA-LiamNeural")
+    speed = float(data.get("speed", 1.0))
+    depth = int(data.get("depth", 1))
+    
+    if not articles or len(articles) > 5:
+        return jsonify({"error": "Please select 1-5 articles"}), 400
+    
+    try:
+        results = []
+        
+        for i, article in enumerate(articles):
+            description = article.get("description", "").strip()
+            title = article.get("title", "").strip()
+            
+            if not description:
+                continue
+                
+            # Check cache first
+            cached_result = None
+            if REDIS_AVAILABLE:
+                cached_result = redis_client.get_cached_description_tts(
+                    description, voice_id, speed, depth
+                )
+            
+            if cached_result:
+                # Use cached version
+                results.append({
+                    "title": title,
+                    "audio_url": cached_result["audio_url"],
+                    "text_used": cached_result["text_used"],
+                    "word_count": cached_result["word_count"],
+                    "from_cache": True
+                })
+                continue
+                
+            # Generate new audio
+            optimized_text = optimize_description_for_voice(description, title)
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w', encoding='utf-8') as temp:
+                temp.write(optimized_text)
+                script_path = temp.name
+            
+            output_filename = f"batch_news_{i}_{int(time.time())}_{voice_id.replace('-', '_')}.mp3"
+            output_audio = os.path.join("static/audio", output_filename)
+            
+            # Generate TTS
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    generate_simple_tts(script_path, output_audio, voice_id, speed, depth)
+                )
+            finally:
+                loop.close()
+                try:
+                    os.unlink(script_path)
+                except:
+                    pass
+            
+            result = {
+                "title": title,
+                "audio_url": f"/static/audio/{output_filename}",
+                "text_used": optimized_text,
+                "word_count": len(optimized_text.split()),
+                "from_cache": False
+            }
+            
+            # Cache for future use
+            if REDIS_AVAILABLE:
+                cache_data = {
+                    "audio_url": result["audio_url"],
+                    "text_used": result["text_used"],
+                    "word_count": result["word_count"],
+                    "estimated_duration": f"{result['word_count'] * 0.6:.1f}s"
+                }
+                redis_client.cache_description_tts(
+                    description, voice_id, speed, depth, cache_data
+                )
+            
+            results.append(result)
+        
+        return jsonify({
+            "success": True,
+            "generated_count": len(results),
+            "audios": results
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Batch TTS error: {e}")
+        return jsonify({"error": "Batch processing failed"}), 500
 
 # ==================== REDIS CACHE MONITORING ROUTES ====================
 
@@ -325,7 +577,8 @@ def get_voice_optimization_config():
             "⚡ Breaking news detection",
             "🎙️ Voice-optimized formatting",
             "⚡ Redis caching",
-            "🎯 No outro (pure content)"
+            "🎯 No outro (pure content)",
+            "🚀 NEW: Direct description TTS"
         ],
         "test_endpoint": "/api/debug/gemini-test"
     })
@@ -941,6 +1194,7 @@ if __name__ == '__main__':
     print(f"   Gemini Test: http://localhost:5000/api/debug/gemini-test")
     print(f"   Voice Config: http://localhost:5000/api/config/voice-optimization")
     print(f"   Cache Stats: http://localhost:5000/api/cache/stats")
+    print(f"   🚀 NEW: Direct TTS: http://localhost:5000/api/news/direct-tts")
     print("=" * 60)
     
     # Initialize Gemini API at startup
