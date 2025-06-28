@@ -445,4 +445,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Test error: {e}")
 else:
-    print("[GNews] 🚀 GNews Client module loaded successfully")git
+    print("[GNews] 🚀 GNews Client module loaded successfully")
