@@ -1,0 +1,49 @@
+# ==================== FILE 4: .dockerignore ====================
+# Create this file: .dockerignore
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+.DS_Store
+.vscode/
+*.swp
+*.swo
+
+# Local environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+uploads/*
+outputs/*
+static/audio/*
+!uploads/.gitkeep
+!outputs/.gitkeep
+!static/audio/.gitkeep
+
+# Old deployment files
+Procfile
+render.yaml
+deploy_instructions.md
+production_env_setup.py
+app.log

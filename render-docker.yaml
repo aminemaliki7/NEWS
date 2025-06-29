@@ -1,14 +1,18 @@
+# ==================== FILE 5: render-docker.yaml ====================
+# Create this file: render-docker.yaml
+
 services:
   - type: web
-    name: newsnap-production
-    env: python
+    name: newsnap-docker
+    env: docker
     region: oregon
     plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 3 --worker-class gevent --worker-connections 1000 --timeout 120 --preload app:app
+    dockerfilePath: ./Render.Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: newsnap-redis
       - key: GEMINI_API_KEY
         value: AIzaSyCFS-xORFSlZgvpjMRIfcu1LoRG24tv3ks
       - key: GNEWS_API_KEY_1
@@ -43,10 +47,13 @@ services:
         value: G-KSBP29N04K
       - key: FLASK_SECRET_KEY
         value: your_very_secret_random_string_here_2024_production_newsnap
-      - key: REDIS_URL
-        value: redis://red-d1en7g7fte5s73eleqp0:6379
     disk:
       name: app-storage
       mountPath: /tmp
       sizeGB: 3
-    healthCheckPath: /api/debug/redis-test
+    healthCheckPath: /
+
+  - type: redis
+    name: newsnap-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru

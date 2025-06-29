@@ -1,0 +1,48 @@
+# ==================== FILE 2: docker-compose.yml ====================
+# Create this file: docker-compose.yml
+
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GNEWS_API_KEY_1=${GNEWS_API_KEY_1}
+      - GNEWS_API_KEY_2=${GNEWS_API_KEY_2}
+      - GNEWS_API_KEY_3=${GNEWS_API_KEY_3}
+      - GNEWS_API_KEY_4=${GNEWS_API_KEY_4}
+      - GNEWS_API_KEY_5=${GNEWS_API_KEY_5}
+      - GNEWS_API_KEY_6=${GNEWS_API_KEY_6}
+      - GNEWS_API_KEY_7=${GNEWS_API_KEY_7}
+      - GNEWS_API_KEY_8=${GNEWS_API_KEY_8}
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
+      - FIREBASE_APP_ID=${FIREBASE_APP_ID}
+      - FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./static/audio:/app/static/audio
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+volumes:
+  redis_data:
