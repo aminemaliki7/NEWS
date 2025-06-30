@@ -8,8 +8,6 @@ import uuid
 from flask import Flask, Response, request, render_template, redirect, url_for, send_file, jsonify, session
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from news_summary import generate_voice_optimized_text
-from youtube_news_generator import generate_youtube_news_script
 import google.generativeai as genai
 from tts import generate_simple_tts
 from gnews_client import GNewsClient
@@ -554,83 +552,31 @@ def newsletter_subscribe():
         return jsonify({'error': 'Failed to save subscription.'}), 500
 
 
-@app.route('/api/news/voice-optimize', methods=['POST'])
+app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():
     data = request.json
 
-    if not data or 'content' not in data:
-        return jsonify({"error": "No content provided"}), 400
+    if not data or 'description' not in data:
+        return jsonify({"error": "No description provided"}), 400
 
     try:
-        content = data.get('content', '')
+        # Simply return the description as-is, no processing needed
+        description = data.get('description', '').strip()
         
-        # Debug: Log the input content length
-        app.logger.info(f"Input content length: {len(content)} characters")
+        if not description:
+            return jsonify({"error": "Empty description provided"}), 400
         
-        # Make sure we don't pass an artificial word limit that might cause truncation  
-        optimized_content = generate_voice_optimized_text(content, include_intro=True, include_outro=True)
-        
-        # Debug: Log the output content length
-        app.logger.info(f"Output content length: {len(optimized_content)} characters")
-        
-        # Ensure the response doesn't get truncated by checking if it ends properly
-        if optimized_content and not optimized_content.rstrip().endswith(('.', '!', '?', 'more.')):
-            app.logger.warning("Optimized content may have been truncated - doesn't end with proper punctuation")
+        # Optional: Clean up any HTML tags if present
+        import re
+        clean_description = re.sub(r'<[^>]*?>', '', description)
+        clean_description = re.sub(r'\s+', ' ', clean_description).strip()
         
         return jsonify({
-            "optimized_content": optimized_content
+            "optimized_content": clean_description
         })
     except Exception as e:
-        app.logger.error(f"Error optimizing content: {str(e)}")
+        app.logger.error(f"Error processing description: {str(e)}")
         return jsonify({"error": str(e)}), 500
-@app.route('/api/news/youtube-script', methods=['POST'])
-def generate_news_youtube_script_route():
-    """Generate a YouTube-style news script based on article content"""
-    # Get request data
-    data = request.json
-    
-    if not data or 'content' not in data:
-        return jsonify({"error": "No content provided"}), 400
-    
-    try:
-        # Extract parameters
-        content = data.get('content', '')
-        title = data.get('title', '')
-        source = data.get('source', '')
-        word_limit = data.get('word_limit', 300)
-        
-        # Validate word limit
-        try:
-            word_limit = int(word_limit)
-            if word_limit < 100:
-                word_limit = 100
-            elif word_limit > 500:
-                word_limit = 500
-        except (ValueError, TypeError):
-            word_limit = 300
-        
-        # Generate the YouTube news script
-        result = generate_youtube_news_script(content, title, source, word_limit)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-        
-    except Exception as e:
-        app.logger.error(f"Error generating YouTube script: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-    except Exception as e:
-        app.logger.error(f"Error optimizing content: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-    
-
-    # Replace your existing stream_temp_audio and generate_summary_audio functions with these:
 
 @app.route('/stream-temp-audio/<path:path>')
 def stream_temp_audio(path):
@@ -662,15 +608,21 @@ def stream_temp_audio(path):
 @app.route('/api/news/summary-audio', methods=['POST'])
 def summary_audio():
     data = request.json
-    text = data.get("content", "")
+    # Change from 'content' to 'description' 
+    text = data.get("description", "") or data.get("content", "")  # fallback for backward compatibility
     voice_id = data.get("voice_id", "en-CA-LiamNeural")
     speed = float(data.get("speed", 1.0))
     depth = int(data.get("depth", 1))
 
     if not text.strip():
-        return jsonify({"error": "No text provided"}), 400
+        return jsonify({"error": "No description provided"}), 400
 
     try:
+        # Optional: Quick cleanup
+        import re
+        text = re.sub(r'<[^>]*?>', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
         # Write text to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w', encoding='utf-8') as temp:
             temp.write(text)
@@ -690,7 +642,6 @@ def summary_audio():
     except Exception as e:
         app.logger.error(f"TTS error: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 # Optional: Add a cleanup function to remove old temp filesssssssssssssssssssssss
 def cleanup_old_files():

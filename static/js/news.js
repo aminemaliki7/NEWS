@@ -420,6 +420,7 @@ function formatDate(dateString) {
     return date.toLocaleDateString('en-US'); // Force en-US locale
 }
 
+// UPDATED FUNCTION: Use description directly instead of fetching full content
 async function listenToSummary(index, autoPlay = true) {
     const article = articles[index];
     const voiceSelect = document.getElementById(`voice-select-${index}`);
@@ -472,47 +473,19 @@ async function listenToSummary(index, autoPlay = true) {
 
     const langCode = selectedVoice.split('-')[0];
 
-    // --- NEW: Fetch full article content if needed ---
-    if (!article.full_content || article.full_content.length < 500) {
-        console.log('Fetching full article content...');
-        try {
-            const res = await fetch(`/api/news/content?url=${encodeURIComponent(article.url)}`);
-            const result = await res.json();
-            if (result.content && result.content.length > 500) {
-                article.full_content = result.content;
-            } else {
-                console.warn('Full content extraction failed or too short');
-                article.full_content = article.description || article.title || '';
-            }
-        } catch (err) {
-            console.error('Error fetching full article content:', err);
-            article.full_content = article.description || article.title || '';
-        }
-    }
+    // SIMPLIFIED: Use description directly from GNews API
+    const description = article.description || article.title || '';
 
-    const rawText = article.full_content || article.content || article.description || article.title || '';
-
-    if (!rawText.trim()) {
+    if (!description.trim()) {
         alert(t.noText);
         resetAudioUI(listenBtn, loadingUI, progressBar);
         return;
     }
 
     try {
-        // Optimize content if needed
-        if (!article.voiceOptimizedContent || article.voiceOptimizedContent.length < 30) {
-            const res = await fetch('/api/news/voice-optimize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: rawText, title: article.title })
-            });
-            const result = await res.json();
-            article.voiceOptimizedContent = result.optimized_content?.trim() || rawText;
-        }
+        let summaryText = description;
 
-        let summaryText = article.voiceOptimizedContent;
-
-        // Translate if needed
+        // Translate if needed (only if not English)
         if (langCode !== 'en') {
             const res = await fetch('/api/news/translate', {
                 method: 'POST',
@@ -525,12 +498,12 @@ async function listenToSummary(index, autoPlay = true) {
             }
         }
 
-        // Generate TTS
+        // Generate TTS directly from description
         const ttsRes = await fetch('/api/news/summary-audio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                content: summaryText,
+                description: summaryText, // Changed from 'content' to 'description'
                 title: article.title,
                 voice_id: selectedVoice,
                 speed: 1.0,
@@ -564,7 +537,7 @@ async function listenToSummary(index, autoPlay = true) {
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     const t = translations.en;
 
-    // Si un autre audio joue, l’arrêter
+    // Si un autre audio joue, l'arrêter
     if (activeAudio) {
         activeAudio.pause();
         activeAudio.currentTime = 0;
@@ -576,11 +549,11 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
 
-    // Préparer l’interface
+    // Préparer l'interface
     loadingUI.classList.add('d-none');
     listenBtn.disabled = false;
 
-    // iOS nécessite une interaction utilisateur : instancier l’audio DANS le clic
+    // iOS nécessite une interaction utilisateur : instancier l'audio DANS le clic
     if (isIOS || !autoPlay) {
         listenBtn.innerHTML = '🔊 Tap to play';
         listenBtn.onclick = () => {
