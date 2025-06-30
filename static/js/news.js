@@ -915,3 +915,433 @@ window.addEventListener('resize', debounce(() => {
     }
 }, 300));
 
+// Add this JavaScript to your existing news.js file
+
+// ===== FAQ SYSTEM =====
+
+// Initialize FAQ when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    initializeFAQ();
+});
+
+function initializeFAQ() {
+    const faqButton = document.getElementById('faqButton');
+    const faqBox = document.getElementById('faqBox');
+    const faqClose = document.getElementById('faqClose');
+
+    if (!faqButton || !faqBox || !faqClose) {
+        console.warn('FAQ elements not found in DOM');
+        return;
+    }
+
+    // Toggle FAQ box visibility
+    faqButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleFAQ();
+    });
+
+    // Close FAQ with X button
+    faqClose.addEventListener('click', function() {
+        closeFAQ();
+    });
+
+    // Close FAQ when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!faqBox.contains(event.target) && !faqButton.contains(event.target)) {
+            closeFAQ();
+        }
+    });
+
+    // Prevent FAQ box clicks from closing it
+    faqBox.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    // Setup question buttons and feedback
+    setupFAQInteractions();
+
+    // ESC key closes FAQ
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeFAQ();
+        }
+    });
+}
+
+function toggleFAQ() {
+    const faqBox = document.getElementById('faqBox');
+    const isVisible = faqBox.style.display === 'flex';
+    
+    if (isVisible) {
+        closeFAQ();
+    } else {
+        openFAQ();
+    }
+}
+
+function openFAQ() {
+    const faqBox = document.getElementById('faqBox');
+    faqBox.style.display = 'flex';
+}
+
+function closeFAQ() {
+    const faqBox = document.getElementById('faqBox');
+    faqBox.style.display = 'none';
+    
+    // Reset everything when closing
+    resetFAQConversation();
+}
+
+// ===== FAQ INTERACTIONS =====
+
+function setupFAQInteractions() {
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    
+    faqQuestions.forEach((button, index) => {
+        button.addEventListener('click', function() {
+            const reply = this.getAttribute('data-reply');
+            const questionText = this.textContent.trim();
+            
+            // Hide the clicked button immediately
+            this.style.display = 'none';
+            
+            // Special handling for feedback button
+            if (questionText.toLowerCase().includes('feedback')) {
+                hideAllFAQButtons();
+                showFeedbackSection();
+                addFAQMessage('Please share your feedback below:', 'bot');
+                return;
+            }
+            
+            // Add user question and bot reply for other buttons
+            addFAQMessage(questionText, 'user');
+            
+            setTimeout(() => {
+                addFAQMessage(reply, 'bot');
+                
+                // After showing the answer, check if we should show reset option
+                const remainingButtons = getRemainingButtons();
+                if (remainingButtons.length > 0 && remainingButtons.length < 5) {
+                    showResetOption();
+                }
+            }, 300);
+        });
+    });
+
+    // Setup feedback functionality
+    setupFeedbackSection();
+}
+
+function hideAllFAQButtons() {
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    faqQuestions.forEach(button => {
+        button.style.display = 'none';
+    });
+}
+
+function getRemainingButtons() {
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    return Array.from(faqQuestions).filter(button => button.style.display !== 'none');
+}
+
+function showResetOption() {
+    const faqFooter = document.getElementById('faqFooter');
+    
+    // Check if reset button already exists
+    if (document.getElementById('resetFAQ')) return;
+    
+    // Create reset button
+    const resetButton = document.createElement('button');
+    resetButton.id = 'resetFAQ';
+    resetButton.className = 'faq-reset';
+    resetButton.textContent = 'Ask Another Question';
+    resetButton.style.cssText = `
+        background: transparent;
+        color: var(--source-date-color);
+        border: 1px dashed var(--border-color);
+        border-radius: 0;
+        padding: 8px 15px;
+        font-size: 0.8em;
+        cursor: pointer;
+        font-family: 'Times New Roman', Times, serif;
+        font-style: italic;
+        margin-top: 10px;
+        width: 100%;
+        transition: all 0.2s ease;
+    `;
+    
+    resetButton.addEventListener('click', function() {
+        resetFAQConversation();
+    });
+    
+    resetButton.addEventListener('mouseover', function() {
+        this.style.borderStyle = 'solid';
+        this.style.color = 'var(--text-color)';
+    });
+    
+    resetButton.addEventListener('mouseout', function() {
+        this.style.borderStyle = 'dashed';
+        this.style.color = 'var(--source-date-color)';
+    });
+    
+    faqFooter.appendChild(resetButton);
+}
+
+function resetFAQConversation() {
+    // Clear all messages except the initial one
+    const faqMessages = document.getElementById('faqMessages');
+    const initialMessage = faqMessages.querySelector('.faq-message.bot-message');
+    faqMessages.innerHTML = '';
+    if (initialMessage) {
+        faqMessages.appendChild(initialMessage);
+    }
+    
+    // Show all FAQ buttons again
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    faqQuestions.forEach(button => {
+        button.style.display = 'block';
+    });
+    
+    // Hide feedback section
+    const feedbackSection = document.getElementById('feedbackSection');
+    if (feedbackSection) {
+        feedbackSection.style.display = 'none';
+        document.getElementById('feedbackInput').value = '';
+        clearFeedbackStatus();
+    }
+    
+    // Remove reset button
+    const resetButton = document.getElementById('resetFAQ');
+    if (resetButton) {
+        resetButton.remove();
+    }
+}
+
+function addFAQMessage(message, sender) {
+    const faqMessages = document.getElementById('faqMessages');
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('faq-message');
+    
+    if (sender === 'bot') {
+        messageDiv.classList.add('bot-message');
+        messageDiv.innerHTML = `<div class="message-content"><strong>FAQ</strong><br>${escapeHtml(message)}</div>`;
+    } else {
+        messageDiv.classList.add('user-message');
+        messageDiv.innerHTML = `<div class="message-content"><strong>You</strong><br>${escapeHtml(message)}</div>`;
+    }
+    
+    faqMessages.appendChild(messageDiv);
+    faqMessages.scrollTop = faqMessages.scrollHeight;
+}
+
+// ===== FEEDBACK FUNCTIONALITY =====
+
+function setupFeedbackSection() {
+    const feedbackSubmit = document.getElementById('feedbackSubmit');
+    const feedbackCancel = document.getElementById('feedbackCancel');
+    const feedbackInput = document.getElementById('feedbackInput');
+
+    if (!feedbackSubmit || !feedbackCancel || !feedbackInput) {
+        console.warn('Feedback elements not found in DOM');
+        return;
+    }
+
+    // Submit feedback
+    feedbackSubmit.addEventListener('click', function(e) {
+        e.preventDefault();
+        submitFeedback();
+    });
+
+    // Cancel feedback
+    feedbackCancel.addEventListener('click', function(e) {
+        e.preventDefault();
+        hideFeedbackSection();
+    });
+
+    // Submit on Ctrl/Cmd + Enter
+    feedbackInput.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            submitFeedback();
+        }
+    });
+
+    // Auto-resize textarea
+    feedbackInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+}
+
+function showFeedbackSection() {
+    const feedbackSection = document.getElementById('feedbackSection');
+    const feedbackInput = document.getElementById('feedbackInput');
+    
+    // Hide all FAQ buttons
+    hideAllFAQButtons();
+    
+    // Remove reset button if it exists
+    const resetButton = document.getElementById('resetFAQ');
+    if (resetButton) {
+        resetButton.remove();
+    }
+    
+    feedbackSection.style.display = 'block';
+    
+    // Focus on textarea after a short delay
+    setTimeout(() => {
+        feedbackInput.focus();
+    }, 100);
+}
+
+function hideFeedbackSection() {
+    const feedbackSection = document.getElementById('feedbackSection');
+    const feedbackInput = document.getElementById('feedbackInput');
+    
+    feedbackSection.style.display = 'none';
+    feedbackInput.value = '';
+    feedbackInput.style.height = 'auto';
+    clearFeedbackStatus();
+    
+    // Show all FAQ buttons again
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    faqQuestions.forEach(button => {
+        button.style.display = 'block';
+    });
+}
+
+function submitFeedback() {
+    const feedbackInput = document.getElementById('feedbackInput');
+    const feedbackSubmit = document.getElementById('feedbackSubmit');
+    
+    if (!feedbackInput || !feedbackSubmit) {
+        console.error('Feedback elements not found');
+        return;
+    }
+    
+    const feedback = feedbackInput.value.trim();
+
+    // Validate input
+    if (!feedback) {
+        showFeedbackStatus('Please enter your feedback before submitting.', 'error');
+        feedbackInput.focus();
+        return;
+    }
+
+    if (feedback.length < 5) {
+        showFeedbackStatus('Please provide more detailed feedback (at least 5 characters).', 'error');
+        feedbackInput.focus();
+        return;
+    }
+
+    // Show loading state
+    feedbackSubmit.disabled = true;
+    feedbackSubmit.textContent = 'Sending...';
+    clearFeedbackStatus();
+
+    // Prepare feedback data
+    const feedbackData = {
+        feedback: feedback,
+        timestamp: new Date().toISOString(),
+        source: 'faq',
+        page: window.location.pathname
+    };
+
+    // Submit to Flask backend
+    fetch('/api/feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(feedbackData)
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            return response.json().then(errorData => {
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }).catch(() => {
+                throw new Error(`Server error: ${response.status}`);
+            });
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('Success response:', data);
+        
+        // Your backend returns: {"message": "Feedback submitted successfully", "success": true}
+        if (data.success === true || data.message) {
+            handleFeedbackSuccess();
+        } else {
+            throw new Error('Unexpected response format');
+        }
+    })
+    .catch(error => {
+        console.error('Feedback error:', error);
+        handleFeedbackError(error);
+    })
+    .finally(() => {
+        // Reset submit button
+        feedbackSubmit.disabled = false;
+        feedbackSubmit.textContent = 'Send';
+    });
+}
+
+function handleFeedbackSuccess() {
+    // Show success message
+    showFeedbackStatus('Thank you for your feedback!', 'success');
+    
+    // Add bot response to chat
+    addFAQMessage('Thank you for your feedback. We truly appreciate your input and will review it carefully.', 'bot');
+    
+    // Auto-close FAQ after showing success message
+    setTimeout(() => {
+        closeFAQ();
+    }, 2000); // Close after 2 seconds
+}
+
+function handleFeedbackError(error) {
+    let errorMessage = 'Unable to send feedback. Please try again.';
+    
+    // Provide more specific error messages
+    if (error.message.includes('429')) {
+        errorMessage = 'Please wait a moment before sending another message.';
+    } else if (error.message.includes('413')) {
+        errorMessage = 'Your message is too long. Please shorten it.';
+    } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+        errorMessage = 'Connection issue. Please check your internet and try again.';
+    }
+    
+    showFeedbackStatus(errorMessage, 'error');
+}
+
+function showFeedbackStatus(message, type) {
+    // Remove existing status
+    clearFeedbackStatus();
+    
+    const feedbackSection = document.getElementById('feedbackSection');
+    const statusDiv = document.createElement('div');
+    statusDiv.className = `feedback-status feedback-${type}`;
+    statusDiv.textContent = message;
+    statusDiv.id = 'feedbackStatusMessage';
+    
+    feedbackSection.appendChild(statusDiv);
+}
+
+function clearFeedbackStatus() {
+    const existingStatus = document.getElementById('feedbackStatusMessage');
+    if (existingStatus) {
+        existingStatus.remove();
+    }
+}
+
+// ===== UTILITY FUNCTIONS =====
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

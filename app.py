@@ -49,6 +49,79 @@ firebase_config = {
 # cred = credentials.Certificate('serviceAccountKey.json')  # You need to download serviceAccountKey.json from Firebase settings
 # firebase_admin.initialize_app(cred)
 
+
+# Add this route to your Flask app (around line 70, after the comments routes)
+
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """API endpoint to submit user feedback"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        feedback_text = data.get('feedback', '').strip()
+        
+        if not feedback_text:
+            return jsonify({"error": "Feedback text is required"}), 400
+        
+        if len(feedback_text) < 5:
+            return jsonify({"error": "Feedback must be at least 5 characters long"}), 400
+        
+        if len(feedback_text) > 1000:
+            return jsonify({"error": "Feedback must be less than 1000 characters"}), 400
+        
+        # Prepare feedback document
+        feedback_doc = {
+            'feedback': feedback_text,
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'source': data.get('source', 'unknown'),
+            'page': data.get('page', ''),
+            'user_ip': request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR')),
+            'user_agent': request.headers.get('User-Agent', '')[:200]  # Truncate for storage
+        }
+        
+        # Add optional fields if provided
+        if 'timestamp' in data:
+            feedback_doc['client_timestamp'] = data['timestamp']
+        
+        # Save to Firestore
+        db.collection('feedback').add(feedback_doc)
+        
+        app.logger.info(f"Feedback submitted successfully from {request.environ.get('REMOTE_ADDR')}")
+        
+        return jsonify({
+            "message": "Feedback submitted successfully", 
+            "success": True
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error submitting feedback: {str(e)}")
+        return jsonify({"error": "Failed to submit feedback. Please try again."}), 500
+
+
+# Optional: Add an admin route to view feedback (add this if you want to see feedback in browser)
+@app.route('/admin/feedback')
+def view_feedback():
+    """Admin route to view submitted feedback (optional)"""
+    try:
+        # Get recent feedback (last 50 entries)
+        feedback_ref = db.collection('feedback')
+        feedback_docs = feedback_ref.order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50).stream()
+        
+        feedback_list = []
+        for doc in feedback_docs:
+            feedback_data = doc.to_dict()
+            feedback_data['id'] = doc.id
+            feedback_list.append(feedback_data)
+        
+        # You can create a simple template or return JSON
+        return jsonify({"feedback": feedback_list})
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving feedback: {str(e)}")
+        return jsonify({"error": "Failed to retrieve feedback"}), 500
 # API — Article Comment
 @app.route('/api/article-comment', methods=['POST'])
 def post_comment():
