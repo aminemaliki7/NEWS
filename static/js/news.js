@@ -159,6 +159,7 @@ function addThemeControl() {
         document.getElementById('newsletterBtn').addEventListener('click', openNewsletterPopup);
     }
 }
+
 function openNewsletterPopup() {
     const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
     modal.show();
@@ -166,48 +167,47 @@ function openNewsletterPopup() {
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('newsletterForm');
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-        const email = document.getElementById('newsletterEmail').value.trim();
-        if (!email || !email.includes('@')) {
-            alert('Please enter a valid email address.');
-            return;
-        }
-
-        const categories = [];
-        document.querySelectorAll('#newsletterForm input[type="checkbox"]:checked').forEach(checkbox => {
-            categories.push(checkbox.value);
-        });
-
-        fetch('/api/newsletter-subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: email,
-                categories: categories
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Subscription failed: ' + data.error);
-            } else {
-                alert('Thank you for subscribing! 📬');
-                const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
-                modal.hide();
-                form.reset();
+            const email = document.getElementById('newsletterEmail').value.trim();
+            if (!email || !email.includes('@')) {
+                alert('Please enter a valid email address.');
+                return;
             }
-        })
-        .catch(err => {
-            console.error('Subscription error:', err);
-            alert('An error occurred. Please try again later.');
+
+            const categories = [];
+            document.querySelectorAll('#newsletterForm input[type="checkbox"]:checked').forEach(checkbox => {
+                categories.push(checkbox.value);
+            });
+
+            fetch('/api/newsletter-subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    categories: categories
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Subscription failed: ' + data.error);
+                } else {
+                    alert('Thank you for subscribing! 📬');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
+                    modal.hide();
+                    form.reset();
+                }
+            })
+            .catch(err => {
+                console.error('Subscription error:', err);
+                alert('An error occurred. Please try again later.');
+            });
         });
-    });
+    }
 });
-
-
-
 
 function toggleTheme() {
     darkMode = !darkMode;
@@ -248,7 +248,6 @@ function updateInterfaceLanguage() {
 
     // Language label and select are removed from HTML, so no need to hide/remove them here.
 }
-
 
 function showLoading() {
     loadingIndicator.classList.remove('d-none');
@@ -300,10 +299,158 @@ async function loadNews() {
     }
 }
 
+// Add CSS styles for full-width articles
+function addFullWidthArticleStyles() {
+    if (!document.getElementById('fullWidthArticleStyles')) {
+        const style = document.createElement('style');
+        style.id = 'fullWidthArticleStyles';
+        style.textContent = `
+            .full-width-article {
+                transition: all 0.3s ease;
+            }
+            
+            .full-width-article .row {
+                margin: 0;
+            }
+            
+            .full-width-article .article-image {
+                border-radius: 8px !important;
+                height: 200px !important;
+                object-fit: cover !important;
+            }
+            
+            .full-width-article .article-title {
+                font-size: 1.25rem !important;
+                font-weight: 600 !important;
+                margin-bottom: 0.5rem !important;
+                min-height: auto !important;
+            }
+            
+            .full-width-article .article-description {
+                font-size: 1rem !important;
+                line-height: 1.5 !important;
+                margin-bottom: 1rem !important;
+                min-height: auto !important;
+            }
+            
+            @media (max-width: 768px) {
+                .full-width-article .row {
+                    flex-direction: column !important;
+                }
+                
+                .full-width-article .article-image {
+                    height: 150px !important;
+                    margin-bottom: 1rem;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Check if article should be full width
+function shouldArticleBeFullWidth(index, totalArticles) {
+    const isLastArticle = index === totalArticles - 1;
+    
+    // Get current screen size
+    const screenWidth = window.innerWidth;
+    let articlesPerRow;
+    
+    if (screenWidth >= 992) { // lg breakpoint
+        articlesPerRow = 3;
+    } else if (screenWidth >= 768) { // md breakpoint
+        articlesPerRow = 2;
+    } else { // sm and below
+        articlesPerRow = 1;
+        return false; // No need for full width on mobile
+    }
+    
+    const remainder = totalArticles % articlesPerRow;
+    
+    // Make last article full width if it would be alone in the row
+    return isLastArticle && remainder === 1 && totalArticles > articlesPerRow;
+}
+
+// Make article full width
+function makeArticleFullWidth(articleElement) {
+    const articleDiv = articleElement.querySelector('.news-article');
+    if (!articleDiv) return;
+    
+    // Change to full width
+    articleDiv.className = 'news-article col-12 mb-3 d-flex';
+    
+    const card = articleDiv.querySelector('.card');
+    if (!card) return;
+    
+    card.classList.add('full-width-article');
+    
+    // Get all the elements we need to restructure
+    const elements = {
+        audioLoading: card.querySelector('.audio-loading'),
+        title: card.querySelector('.article-title'),
+        source: card.querySelector('.article-source'),
+        image: card.querySelector('.article-image'),
+        description: card.querySelector('.article-description'),
+        listenLabel: card.querySelector('.text-muted.small.mb-1'),
+        actions: card.querySelector('.article-actions'),
+        comments: card.querySelector('.article-comments')
+    };
+    
+    // Create new horizontal layout
+    card.innerHTML = `
+        <div class="row g-0 h-100 w-100">
+            <div class="col-md-4 d-flex align-items-center p-2">
+                ${elements.audioLoading ? elements.audioLoading.outerHTML : ''}
+                ${elements.image ? elements.image.outerHTML : ''}
+            </div>
+            <div class="col-md-8 d-flex flex-column justify-content-between p-3">
+                <div class="content-section">
+                    ${elements.title ? elements.title.outerHTML : ''}
+                    ${elements.source ? elements.source.outerHTML : ''}
+                    ${elements.description ? elements.description.outerHTML : ''}
+                </div>
+                <div class="actions-section mt-auto">
+                    ${elements.listenLabel ? elements.listenLabel.outerHTML : ''}
+                    ${elements.actions ? elements.actions.outerHTML : ''}
+                    ${elements.comments ? elements.comments.outerHTML : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Enhanced displayNews function with full-width last article
 function displayNews(articlesData) {
     newsList.innerHTML = '';
+    
     articlesData.forEach((article, index) => {
         const articleElement = createArticleElement(article, index);
+        
+        // Check if this is the last article and if it would be alone in its row
+        const isLastArticle = index === articlesData.length - 1;
+        const screenWidth = window.innerWidth;
+        
+        let articlesPerRow;
+        if (screenWidth >= 992) { // lg breakpoint
+            articlesPerRow = 3;
+        } else if (screenWidth >= 768) { // md breakpoint
+            articlesPerRow = 2;
+        } else { // sm and below
+            articlesPerRow = 1;
+        }
+        
+        const remainder = articlesData.length % articlesPerRow;
+        
+        // If it's the last article and it would be alone (remainder = 1), make it full width
+        if (isLastArticle && remainder === 1 && articlesData.length > articlesPerRow) {
+            // Modify the article element classes for full width
+            const articleDiv = articleElement.querySelector('.news-article');
+            if (articleDiv) {
+                // Just change the column classes to make it full width, keep everything else the same
+                articleDiv.className = 'news-article col-12 mb-3 d-flex';
+            }
+        }
+        
         newsList.appendChild(articleElement);
     });
 }
@@ -351,8 +498,6 @@ function createArticleElement(article, index) {
 
     return template;
 }
-
-
 
 function stopActiveAudio() {
     if (activeAudio) {
@@ -599,6 +744,7 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
         });
     }
 }
+
 function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     const t = translations.en;
 
@@ -621,8 +767,6 @@ function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
         resetAudioUI(listenBtn, loadingUI, progressBar);
     };
 }
-
-
 
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
     if (loadingUI) loadingUI.classList.add('d-none');
@@ -647,6 +791,7 @@ function highlightCurrentArticle(index) {
         currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
+
 // Load comments for one article - FIXED VERSION
 function loadComments(articleId, container) {
     fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
@@ -694,17 +839,15 @@ function loadComments(articleId, container) {
             commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Error loading comments.</p>';
         });
 }
+
 // Helper function to escape HTML and prevent XSS
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
-// news.js
 
-// ... (other functions like loadComments, etc. before this)
-
-/// Setup comment form submit - IMPROVED VERSION (without success message)
+// Setup comment form submit - IMPROVED VERSION (without success message)
 function setupCommentForms() {
     document.querySelectorAll('.article-comments').forEach(container => {
         const articleId = container.dataset.articleId;
@@ -763,3 +906,12 @@ function setupCommentForms() {
         });
     });
 }
+
+// Add window resize listener to recalculate layout when screen size changes
+window.addEventListener('resize', debounce(() => {
+    if (articles.length > 0) {
+        displayNews(articles);
+        setupCommentForms(); // Re-setup comment forms after re-rendering
+    }
+}, 300));
+

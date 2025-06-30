@@ -49,6 +49,7 @@
 
 
 <body>
+  
   <div class="journal-page-wrapper">
 
     <header class="masthead text-center py-4">
@@ -83,31 +84,37 @@
       </nav>
 
       <section class="filter-toolbar mb-4">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-5 col-12">
-            <label for="searchQuery" class="form-label visually-hidden">Search</label>
-            <input id="searchQuery" type="text" class="form-control" placeholder="Search keywords..." />
-          </div>
-          <div class="col-md-5 col-12">
-            <label for="category" class="form-label visually-hidden">Category</label>
-            <select id="category" class="form-select">
-              <option value="general">General</option>
-              <option value="world">World</option>
-              <option value="nation">Nation</option>
-              <option value="business">Business</option>
-              <option value="technology">Technology</option>
-              <option value="entertainment">Entertainment</option>
-              <option value="sports">Sports</option>
-              <option value="science">Science</option>
-              <option value="health">Health</option>
-            </select>
-          </div>
-          <div class="col-md-2 col-12">
-            <button id="searchBtn" class="btn btn-dark w-100">Apply Filters</button>
-          </div>
-        </div>
-        <hr class="section-separator mt-4">
-      </section>
+  <div class="row g-2 align-items-end">
+    <!-- Search bar (expanded on desktop) -->
+    <div class="col-md-10 col-12">
+      <label for="searchQuery" class="form-label visually-hidden">Search</label>
+      <input id="searchQuery" type="text" class="form-control" placeholder="Search keywords..." />
+    </div>
+
+    <!-- Apply button -->
+    <div class="col-md-2 col-12">
+      <button id="searchBtn" class="btn btn-dark w-100">Apply Filters</button>
+    </div>
+
+    <!-- Category dropdown (mobile only) -->
+    <div class="col-12 d-md-none">
+      <label for="category" class="form-label visually-hidden">Category</label>
+      <select id="category" class="form-select mt-2">
+        <option value="general">General</option>
+        <option value="world">World</option>
+        <option value="nation">Nation</option>
+        <option value="business">Business</option>
+        <option value="technology">Technology</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="sports">Sports</option>
+        <option value="science">Science</option>
+        <option value="health">Health</option>
+      </select>
+    </div>
+  </div>
+  <hr class="section-separator mt-4">
+</section>
+
 
       <section class="status-messages text-center my-5">
         <div id="loadingIndicator" class="d-none">
