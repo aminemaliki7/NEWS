@@ -15,4 +15,5 @@ beautifulsoup4
 html5lib
 nltk
 aiofiles
-asyncio
+redis==4.5.4
+dramatiq[redis]==1.18.0

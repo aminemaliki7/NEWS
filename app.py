@@ -9,14 +9,19 @@ from flask import Flask, Response, request, render_template, redirect, url_for, 
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import google.generativeai as genai
+from tasks import cache_news_task, generate_tts_task
 from tts import generate_simple_tts
 from gnews_client import GNewsClient
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 from flask import send_file
-
-
+import dramatiq
+import redis
+import os
+from dramatiq.brokers.redis import RedisBroker
+from dramatiq.results import Results
+from dramatiq.results.backends import RedisBackend
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -26,7 +31,17 @@ cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
 
 db = firestore.client() 
+# Initialize Redis
+redis_client = redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+redis_broker = RedisBroker(url=redis_url)
+result_backend = RedisBackend(url=redis_url)
+redis_broker.add_middleware(Results(backend=result_backend))
+# Set the broker globally
+dramatiq.set_broker(redis_broker)
 
+# Export for easy importing
+broker = redis_broker
 gnews_client = GNewsClient() 
 COMMENTS = {}
 
@@ -780,10 +795,79 @@ def test_gnews_keys():
         "total_api_keys": total_keys,
         "status": "OK"
     })
+# Async TTS endpoint
+@app.route('/api/news/summary-audio-async', methods=['POST'])
+def summary_audio_async():
+    data = request.json
+    text = data.get("description", "") or data.get("content", "")
+    voice_id = data.get("voice_id", "en-CA-LiamNeural")
+    speed = float(data.get("speed", 1.0))
+    depth = int(data.get("depth", 1))
 
+    if not text.strip():
+        return jsonify({"error": "No description provided"}), 400
 
+    # Generate unique task ID
+    task_id = str(uuid.uuid4())
     
-
+    # Start background task
+    message = generate_tts_task.send(text, voice_id, speed, depth, task_id)
+    
+    return jsonify({
+        "task_id": task_id,
+        "message_id": message.message_id,
+        "status": "processing",
+        "message": "Audio generation started"
+    })
+@app.route('/api/news-cached')
+def get_news_cached():
+    category = request.args.get('category', 'general')
+    language = request.args.get('language', 'en')
+    
+    cache_key = f"news:{category}:{language}"
+    cached_news = redis_client.get(cache_key)
+    
+    if cached_news:
+        return jsonify(json.loads(cached_news))
+    
+    # If not cached, start background caching task and return fresh data
+    try:
+        results = gnews_client.get_top_headlines(category=category, language=language)
+        # Start background caching
+        cache_news_task.send(category, language)
+        return jsonify(results)
+    except Exception:
+        return jsonify({"error": "Failed to fetch news", "articles": []}), 500
+# Task status endpoint
+@app.route('/api/task-status/<task_id>')
+def get_task_status(task_id):
+    try:
+        # Check if result is cached
+        cache_key = f"tts:{task_id}"
+        cached_result = redis_client.get(cache_key)
+        
+        if cached_result:
+            result = json.loads(cached_result)
+            return jsonify({
+                'state': 'SUCCESS',
+                'progress': 100,
+                'result': result,
+                'message': 'Audio generation completed!'
+            })
+        
+        # If not cached, task might still be processing
+        return jsonify({
+            'state': 'PROCESSING',
+            'progress': 50,
+            'message': 'Generating audio...'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'state': 'FAILURE',
+            'error': str(e),
+            'message': 'Task failed'
+        })
 # Call cleanup periodically (you can set this up with a scheduler)
 # cleanup_old_files()
 if __name__ == '__main__':

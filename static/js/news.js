@@ -618,7 +618,7 @@ async function listenToSummary(index, autoPlay = true) {
 
     const langCode = selectedVoice.split('-')[0];
 
-    // SIMPLIFIED: Use description directly from GNews API
+    // Use description directly from GNews API
     const description = article.description || article.title || '';
 
     if (!description.trim()) {
@@ -643,33 +643,15 @@ async function listenToSummary(index, autoPlay = true) {
             }
         }
 
-        // Generate TTS directly from description
-        const ttsRes = await fetch('/api/news/summary-audio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                description: summaryText, // Changed from 'content' to 'description'
-                title: article.title,
-                voice_id: selectedVoice,
-                speed: 1.0,
-                depth: 1
-            })
-        });
+        // Decide whether to use sync or async TTS based on text length
+        const useAsync = summaryText.length > 300; // Use async for longer texts
 
-        const result = await ttsRes.json();
-
-        if (result.audio_url) {
-            audioCache.set(cacheKey, result.audio_url);
-
-            if (audioCache.size > 20) {
-                const firstKey = audioCache.keys().next().value;
-                audioCache.delete(firstKey);
-            }
-
-            playAudio(result.audio_url, index, listenBtn, loadingUI, progressBar, autoPlay);
+        if (useAsync) {
+            // Use async TTS for longer texts
+            await generateAsyncTTS(summaryText, article.title, selectedVoice, index, listenBtn, loadingUI, progressBar, autoPlay, cacheKey);
         } else {
-            alert(t.audioFailed);
-            resetAudioUI(listenBtn, loadingUI, progressBar);
+            // Use sync TTS for shorter texts (faster)
+            await generateSyncTTS(summaryText, article.title, selectedVoice, index, listenBtn, loadingUI, progressBar, autoPlay, cacheKey);
         }
 
     } catch (err) {
@@ -678,11 +660,117 @@ async function listenToSummary(index, autoPlay = true) {
         resetAudioUI(listenBtn, loadingUI, progressBar);
     }
 }
+async function generateAsyncTTS(text, title, voiceId, index, listenBtn, loadingUI, progressBar, autoPlay, cacheKey) {
+    const t = translations.en;
+
+    try {
+        // Start async TTS task
+        const startRes = await fetch('/api/news/summary-audio-async', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                description: text,
+                title: title,
+                voice_id: voiceId,
+                speed: 1.0,
+                depth: 1
+            })
+        });
+
+        const taskInfo = await startRes.json();
+        
+        if (!taskInfo.task_id) {
+            throw new Error('Failed to start audio generation');
+        }
+
+        console.log(`Started async TTS task: ${taskInfo.task_id}`);
+        
+        // Update UI to show we're generating
+        listenBtn.innerHTML = '🔄';
+        
+        // Poll for completion
+        const audioUrl = await pollTaskStatus(taskInfo.task_id, progressBar, listenBtn);
+        
+        if (audioUrl) {
+            // Cache the result
+            audioCache.set(cacheKey, audioUrl);
+            
+            // Play the audio
+            playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay);
+        } else {
+            throw new Error('Audio generation failed');
+        }
+
+    } catch (error) {
+        console.error('Async TTS error:', error);
+        throw error;
+    }
+}
+async function pollTaskStatus(taskId, progressBar, listenBtn, maxAttempts = 60) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            const statusRes = await fetch(`/api/task-status/${taskId}`);
+            const status = await statusRes.json();
+            
+            console.log(`Task ${taskId} status:`, status.state, `(${status.progress || 0}%)`);
+            
+            // Update progress bar
+            if (progressBar && status.progress) {
+                progressBar.value = status.progress;
+            }
+            
+            if (status.state === 'SUCCESS' && status.result?.audio_url) {
+                return status.result.audio_url;
+            } else if (status.state === 'FAILURE') {
+                throw new Error(status.error || 'Task failed');
+            }
+            
+            // Wait before next poll (2 seconds)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+        } catch (error) {
+            console.error('Error polling task status:', error);
+            if (attempt === maxAttempts - 1) throw error;
+        }
+    }
+    
+    throw new Error('Task timeout - audio generation took too long');
+}
+
+// Sync TTS generation (for shorter texts)
+async function generateSyncTTS(text, title, voiceId, index, listenBtn, loadingUI, progressBar, autoPlay, cacheKey) {
+    const ttsRes = await fetch('/api/news/summary-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            description: text,
+            title: title,
+            voice_id: voiceId,
+            speed: 1.0,
+            depth: 1
+        })
+    });
+
+    const result = await ttsRes.json();
+
+    if (result.audio_url) {
+        audioCache.set(cacheKey, result.audio_url);
+
+        if (audioCache.size > 20) {
+            const firstKey = audioCache.keys().next().value;
+            audioCache.delete(firstKey);
+        }
+
+        playAudio(result.audio_url, index, listenBtn, loadingUI, progressBar, autoPlay);
+    } else {
+        throw new Error('Failed to generate audio');
+    }
+}
 
 function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay = true) {
     const t = translations.en;
 
-    // Si un autre audio joue, l'arrêter
+    // Stop any other playing audio
     if (activeAudio) {
         activeAudio.pause();
         activeAudio.currentTime = 0;
@@ -694,17 +782,17 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
     currentPlayButton = listenBtn;
     currentArticleIndex = index;
 
-    // Préparer l'interface
+    // Prepare UI
     loadingUI.classList.add('d-none');
+    progressBar.style.display = 'block';
+    progressBar.value = 0;
     listenBtn.disabled = false;
 
-    // iOS nécessite une interaction utilisateur : instancier l'audio DANS le clic
+    // iOS requires user interaction
     if (isIOS || !autoPlay) {
         listenBtn.innerHTML = '🔊 Tap to play';
         listenBtn.onclick = () => {
             activeAudio = new Audio(audioUrl);
-
-            // Ajouter les events une fois l'audio créé
             setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
 
             activeAudio.play().then(() => {
@@ -712,9 +800,10 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
             }).catch(err => {
                 console.error('Playback error:', err);
                 alert(t.audioLoadError);
+                resetAudioUI(listenBtn, loadingUI, progressBar);
             });
 
-            // Gestion pause/reprise
+            // Handle pause/resume
             listenBtn.onclick = () => {
                 if (activeAudio.paused) {
                     activeAudio.play();
@@ -726,11 +815,21 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
             };
         };
     } else {
-        // Desktop : autoplay autorisé
+        // Desktop: autoplay allowed
         activeAudio = new Audio(audioUrl);
         setupAudioEvents(activeAudio, listenBtn, loadingUI, progressBar);
+        
         activeAudio.play().then(() => {
             listenBtn.innerHTML = '‖';
+            listenBtn.onclick = () => {
+                if (activeAudio.paused) {
+                    activeAudio.play();
+                    listenBtn.innerHTML = '‖';
+                } else {
+                    activeAudio.pause();
+                    listenBtn.innerHTML = '▶︎';
+                }
+            };
         }).catch(err => {
             console.warn('Autoplay blocked, switching to manual:', err);
             listenBtn.innerHTML = '🔊 Tap to play';
@@ -739,6 +838,7 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
                     listenBtn.innerHTML = '‖';
                 }).catch(err => {
                     alert(t.audioLoadError);
+                    resetAudioUI(listenBtn, loadingUI, progressBar);
                 });
             };
         });
@@ -748,48 +848,111 @@ function playAudio(audioUrl, index, listenBtn, loadingUI, progressBar, autoPlay 
 function setupAudioEvents(audio, listenBtn, loadingUI, progressBar) {
     const t = translations.en;
 
+    // Track audio progress
     audio.ontimeupdate = () => {
         if (progressBar && audio.duration) {
-            progressBar.value = (audio.currentTime / audio.duration) * 100;
+            const progress = (audio.currentTime / audio.duration) * 100;
+            progressBar.value = progress;
         }
     };
 
+    // Handle audio end
     audio.onended = () => {
+        resetAudioUI(listenBtn, loadingUI, progressBar);
+        activeAudio = null;
+        currentPlayButton = null;
+        currentArticleIndex = null;
+        
+        // Remove highlight from current article
+        document.querySelectorAll('.card').forEach(card => {
+            card.classList.remove('border-primary', 'shadow-lg');
+            card.style.transform = '';
+        });
+    };
+
+    // Handle audio errors
+    audio.onerror = () => {
+        console.error("Audio error:", audio.error);
+        alert(t.audioLoadError);
         resetAudioUI(listenBtn, loadingUI, progressBar);
         activeAudio = null;
         currentPlayButton = null;
         currentArticleIndex = null;
     };
 
-    audio.onerror = () => {
-        console.error("Audio error:", audio.error);
-        alert(t.audioLoadError);
-        resetAudioUI(listenBtn, loadingUI, progressBar);
+    // Handle successful load
+    audio.onloadstart = () => {
+        console.log('Audio loading started');
+    };
+
+    audio.oncanplay = () => {
+        console.log('Audio ready to play');
+        // Highlight the current article
+        highlightCurrentArticle(currentArticleIndex);
     };
 }
 
 function resetAudioUI(listenBtn, loadingUI, progressBar) {
     if (loadingUI) loadingUI.classList.add('d-none');
-    if (progressBar) progressBar.style.display = 'none';
+    if (progressBar) {
+        progressBar.style.display = 'none';
+        progressBar.value = 0;
+    }
     if (listenBtn) {
         listenBtn.disabled = false;
-        listenBtn.innerHTML = '▶︎ '; // Reset to play icon
+        listenBtn.innerHTML = '▶︎ ';
+        listenBtn.onclick = () => listenToSummary(parseInt(listenBtn.dataset.index));
     }
 }
 
 // Function to highlight the currently playing article (optional, but good for UX)
 function highlightCurrentArticle(index) {
+    // Remove highlight from all articles
     document.querySelectorAll('.card').forEach(card => {
         card.classList.remove('border-primary', 'shadow-lg');
         card.style.transform = '';
     });
 
+    // Highlight current article
     const currentCard = document.querySelector(`.article-listen-btn[data-index="${index}"]`)?.closest('.card');
     if (currentCard) {
         currentCard.classList.add('border-primary', 'shadow-lg');
         currentCard.style.transform = 'scale(1.02)';
         currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+}
+async function retryAudioGeneration(index, attempt = 1, maxRetries = 2) {
+    if (attempt > maxRetries) {
+        throw new Error('Max retries exceeded');
+    }
+
+    console.log(`Audio generation attempt ${attempt}/${maxRetries} for article ${index}`);
+    
+    try {
+        await listenToSummary(index);
+    } catch (error) {
+        console.warn(`Attempt ${attempt} failed:`, error);
+        
+        if (attempt < maxRetries) {
+            // Wait before retry (exponential backoff)
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return retryAudioGeneration(index, attempt + 1, maxRetries);
+        } else {
+            throw error;
+        }
+    }
+}
+
+// Add performance monitoring
+function logAudioPerformance(action, startTime, additionalData = {}) {
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    
+    console.log(`Audio ${action} took ${duration.toFixed(2)}ms`, additionalData);
+    
+    // You could send this data to analytics if needed
+    // analytics.track('audio_performance', { action, duration, ...additionalData });
 }
 
 // Load comments for one article - FIXED VERSION
