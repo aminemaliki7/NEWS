@@ -16,7 +16,10 @@ class GNewsClient:
             os.getenv('GNEWS_API_KEY_2'),
             os.getenv('GNEWS_API_KEY_3'),
             os.getenv('GNEWS_API_KEY_4'),
-            os.getenv('GNEWS_API_KEY_5')
+            os.getenv('GNEWS_API_KEY_5'),
+            os.getenv('GNEWS_API_KEY_6'),
+            os.getenv('GNEWS_API_KEY_7'),
+            os.getenv('GNEWS_API_KEY_8')
         ]
         
         if not any(self.api_keys):
