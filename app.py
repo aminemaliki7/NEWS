@@ -27,8 +27,7 @@ import hashlib
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = "simple_tts_generator"  # for session management
-
+app.secret_key = os.getenv('SECRET_KEY', 'your-secure-random-key-here')
 cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
 
@@ -62,9 +61,6 @@ firebase_config = {
 }
 
 
-# REMOVE THESE DUPLICATE LINES:
-# cred = credentials.Certificate('serviceAccountKey.json')  # You need to download serviceAccountKey.json from Firebase settings
-# firebase_admin.initialize_app(cred)
 
 
 # Add this route to your Flask app (around line 70, after the comments routes)
@@ -139,6 +135,82 @@ def view_feedback():
     except Exception as e:
         app.logger.error(f"Error retrieving feedback: {str(e)}")
         return jsonify({"error": "Failed to retrieve feedback"}), 500
+@app.route('/api/comment-like', methods=['POST'])
+def handle_comment_like():
+    """Handle heart like/unlike for comments"""
+    try:
+        data = request.get_json()
+        comment_id = data.get('comment_id')
+        article_id = data.get('article_id')
+        
+        if not comment_id or not article_id:
+            return jsonify({'error': 'Missing comment_id or article_id'}), 400
+        
+        # Get user identifier (using your existing get_user_id function)
+        user_id = get_user_id()
+        
+        # Reference to the comment document
+        comment_ref = db.collection('comments').document(article_id).collection('comments').document(comment_id)
+        
+        # Use a transaction to ensure consistency
+        @firestore.transactional
+        def update_like(transaction):
+            # Get current comment data
+            comment_doc = comment_ref.get(transaction=transaction)
+            if not comment_doc.exists:
+                raise ValueError("Comment not found")
+            
+            comment_data = comment_doc.to_dict()
+            
+            # Initialize likes data if not present
+            if 'likes' not in comment_data:
+                comment_data['likes'] = 0
+            if 'liked_by' not in comment_data:
+                comment_data['liked_by'] = []
+            
+            liked_by = comment_data['liked_by']
+            current_likes = comment_data['likes']
+            user_liked = user_id in liked_by
+            
+            # Toggle like status
+            if user_liked:
+                # Unlike: remove user from liked_by and decrease count
+                liked_by.remove(user_id)
+                current_likes = max(0, current_likes - 1)
+                new_user_liked = False
+            else:
+                # Like: add user to liked_by and increase count
+                if user_id not in liked_by:
+                    liked_by.append(user_id)
+                current_likes += 1
+                new_user_liked = True
+            
+            # Update the comment document
+            transaction.update(comment_ref, {
+                'likes': current_likes,
+                'liked_by': liked_by,
+                'updated_at': firestore.SERVER_TIMESTAMP
+            })
+            
+            return {
+                'likes': current_likes,
+                'user_liked': new_user_liked
+            }
+        
+        # Execute the transaction
+        transaction = db.transaction()
+        result = update_like(transaction)
+        
+        return jsonify({
+            'success': True,
+            **result
+        })
+        
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        app.logger.error(f"Error handling comment like: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 # API — Article Comment
 @app.route('/api/article-comment', methods=['POST'])
 def post_comment():
@@ -168,14 +240,13 @@ def post_comment():
         # Each article will be a collection
         doc_ref = db.collection('comments').document(article_id).collection('comments').document()
 
-        # Updated comment structure with voting fields
+        # Updated comment structure with heart likes
         comment_data = {
             'nickname': nickname,
             'comment': comment_text,
             'timestamp': firestore.SERVER_TIMESTAMP,
-            'upvotes': 0,
-            'downvotes': 0,
-            'user_votes': {}  # Will store {user_id: 'up'/'down'}
+            'likes': 0,
+            'liked_by': []  # Array of user_ids who liked this comment
         }
 
         doc_ref.set(comment_data)
@@ -183,8 +254,6 @@ def post_comment():
         return jsonify({"message": "Comment posted", "nickname": nickname})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# Add this helper function to generate user IDs based on IP
 def get_user_id():
     """Generate a consistent user ID based on IP address for voting"""
     user_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
@@ -192,7 +261,6 @@ def get_user_id():
     user_agent = request.headers.get('User-Agent', '')
     user_string = f"{user_ip}:{user_agent}"
     return hashlib.sha256(user_string.encode()).hexdigest()[:16]
-
 # API — Article Comment
 @app.route('/api/article-comments', methods=['GET'])
 def get_comments():
@@ -201,7 +269,7 @@ def get_comments():
         return jsonify({"error": "Missing article_id"}), 400
 
     try:
-        user_id = get_user_id()  # Get current user's ID for vote state
+        user_id = get_user_id()  # Get current user's ID for like state
         
         comments_ref = db.collection('comments').document(article_id).collection('comments')
         comments_snapshot = comments_ref.order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
@@ -211,112 +279,29 @@ def get_comments():
             comment = doc.to_dict()
             comment['id'] = doc.id
             
-            # Add user's current vote state
-            user_votes = comment.get('user_votes', {})
-            comment['userVote'] = user_votes.get(user_id, None)
+            # Add user's current like state
+            liked_by = comment.get('liked_by', [])
+            comment['userLiked'] = user_id in liked_by
             
-            # Ensure vote counts exist
-            comment['upvotes'] = comment.get('upvotes', 0)
-            comment['downvotes'] = comment.get('downvotes', 0)
+            # Ensure likes count exists
+            comment['likes'] = comment.get('likes', 0)
+            
+            # Remove the liked_by array from response for privacy
+            comment.pop('liked_by', None)
             
             comments.append(comment)
 
-        # Sort comments by score (upvotes - downvotes), highest first
-        comments.sort(key=lambda x: (x.get('upvotes', 0) - x.get('downvotes', 0)), reverse=True)
+        # Sort comments by likes count (highest first), then by timestamp
+        comments.sort(key=lambda x: (x.get('likes', 0), x.get('timestamp', 0)), reverse=True)
 
         return jsonify({"comments": comments})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-@app.route('/api/comment-vote', methods=['POST'])
-def vote_on_comment():
-    """Handle voting on comments"""
-    try:
-        data = request.json
-        comment_id = data.get('comment_id')
-        article_id = data.get('article_id')
-        vote_type = data.get('vote_type')  # 'up' or 'down'
 
-        if not comment_id or not article_id or vote_type not in ['up', 'down']:
-            return jsonify({"error": "Invalid vote data"}), 400
-
-        user_id = get_user_id()
-        
-        # Get reference to the comment
-        comment_ref = db.collection('comments').document(article_id).collection('comments').document(comment_id)
-        
-        # Use a transaction to ensure consistency
-        @firestore.transactional
-        def update_vote(transaction):
-            # Get current comment data
-            comment_doc = comment_ref.get(transaction=transaction)
-            if not comment_doc.exists:
-                raise ValueError("Comment not found")
-            
-            comment_data = comment_doc.to_dict()
-            user_votes = comment_data.get('user_votes', {})
-            current_vote = user_votes.get(user_id)
-            upvotes = comment_data.get('upvotes', 0)
-            downvotes = comment_data.get('downvotes', 0)
-            
-            # Calculate new vote state
-            if current_vote == vote_type:
-                # User is removing their vote
-                if vote_type == 'up':
-                    upvotes = max(0, upvotes - 1)
-                else:
-                    downvotes = max(0, downvotes - 1)
-                user_votes.pop(user_id, None)  # Remove user's vote
-                new_user_vote = None
-            else:
-                # User is changing or adding their vote
-                if current_vote == 'up':
-                    upvotes = max(0, upvotes - 1)
-                elif current_vote == 'down':
-                    downvotes = max(0, downvotes - 1)
-                
-                if vote_type == 'up':
-                    upvotes += 1
-                else:
-                    downvotes += 1
-                
-                user_votes[user_id] = vote_type
-                new_user_vote = vote_type
-            
-            # Update the document
-            transaction.update(comment_ref, {
-                'upvotes': upvotes,
-                'downvotes': downvotes,
-                'user_votes': user_votes
-            })
-            
-            return {
-                'upvotes': upvotes,
-                'downvotes': downvotes,
-                'score': upvotes - downvotes,
-                'user_vote': new_user_vote
-            }
-        
-        # Execute the transaction
-        transaction = db.transaction()
-        result = update_vote(transaction)
-        
-        return jsonify({
-            "success": True,
-            **result
-        })
-
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        app.logger.error(f"Error voting on comment: {str(e)}")
-        return jsonify({"error": "Failed to process vote"}), 500
-
-# Add a migration function to update existing comments (run this once)
-@app.route('/api/migrate-comments', methods=['POST'])
-def migrate_existing_comments():
-    """One-time migration to add voting fields to existing comments"""
+@app.route('/api/migrate-to-heart-likes', methods=['POST'])
+def migrate_to_heart_likes():
+    """One-time migration to convert upvote/downvote system to heart likes"""
     try:
         # This is a utility endpoint - you should protect it or remove it after migration
         password = request.json.get('password') if request.json else None
@@ -338,18 +323,32 @@ def migrate_existing_comments():
             for comment_doc in comments:
                 comment_data = comment_doc.to_dict()
                 
-                # Check if voting fields already exist
-                if 'upvotes' not in comment_data:
-                    # Add voting fields
-                    comment_doc.reference.update({
-                        'upvotes': 0,
-                        'downvotes': 0,
-                        'user_votes': {}
-                    })
+                # Check if this comment has the old voting system
+                if 'upvotes' in comment_data or 'downvotes' in comment_data:
+                    upvotes = comment_data.get('upvotes', 0)
+                    downvotes = comment_data.get('downvotes', 0)
+                    user_votes = comment_data.get('user_votes', {})
+                    
+                    # Convert to heart likes: only count users who upvoted
+                    liked_by = [user_id for user_id, vote in user_votes.items() if vote == 'up']
+                    likes_count = len(liked_by)
+                    
+                    # Update the comment with new structure
+                    update_data = {
+                        'likes': likes_count,
+                        'liked_by': liked_by
+                    }
+                    
+                    # Remove old fields
+                    comment_doc.reference.update(update_data)
+                    
+                    # Remove old fields (Firestore doesn't have a direct way to delete fields in update)
+                    # You might want to do this manually or in a separate operation
+                    
                     updated_count += 1
         
         return jsonify({
-            "message": f"Migration completed. Updated {updated_count} comments.",
+            "message": f"Migration completed. Updated {updated_count} comments to heart like system.",
             "updated_count": updated_count
         })
         
@@ -357,58 +356,116 @@ def migrate_existing_comments():
         app.logger.error(f"Migration error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Optional: Add an admin endpoint to view comment statistics
-@app.route('/api/admin/comment-stats')
-def comment_statistics():
-    """Get statistics about comments and votes"""
+# Add a migration function to update existing comments (run this once)
+@app.route('/api/article-like', methods=['POST'])
+def handle_article_like():
+    """Handle heart like/unlike for articles (Instagram style)"""
     try:
-        # Simple protection - you should implement proper admin authentication
-        admin_key = request.args.get('admin_key')
-        if admin_key != 'your_admin_key':  # Set a secure admin key
-            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json()
+        article_id = data.get('article_id')
         
-        stats = {
-            'total_articles_with_comments': 0,
-            'total_comments': 0,
-            'total_votes': 0,
-            'top_commented_articles': []
-        }
+        if not article_id:
+            return jsonify({'error': 'Missing article_id'}), 400
         
-        # Get all articles that have comments
-        comments_collection = db.collection('comments')
-        articles = comments_collection.stream()
+        user_id = get_user_id()
         
-        article_comment_counts = []
+        # Reference to the article likes document
+        article_ref = db.collection('article_likes').document(article_id)
         
-        for article_doc in articles:
-            article_id = article_doc.id
-            comments_ref = comments_collection.document(article_id).collection('comments')
-            comments = list(comments_ref.stream())
+        # Use a transaction to ensure consistency
+        @firestore.transactional
+        def update_article_like(transaction):
+            # Get current article data
+            article_doc = article_ref.get(transaction=transaction)
             
-            if comments:
-                stats['total_articles_with_comments'] += 1
-                comment_count = len(comments)
-                stats['total_comments'] += comment_count
-                
-                article_comment_counts.append({
-                    'article_id': article_id,
-                    'comment_count': comment_count
-                })
-                
-                # Count total votes
-                for comment_doc in comments:
-                    comment_data = comment_doc.to_dict()
-                    stats['total_votes'] += comment_data.get('upvotes', 0) + comment_data.get('downvotes', 0)
+            if not article_doc.exists:
+                # Create new article likes document
+                article_data = {
+                    'likes': 0,
+                    'liked_by': []
+                }
+            else:
+                article_data = article_doc.to_dict()
+            
+            # Initialize likes data if not present
+            if 'likes' not in article_data:
+                article_data['likes'] = 0
+            if 'liked_by' not in article_data:
+                article_data['liked_by'] = []
+            
+            liked_by = article_data['liked_by']
+            current_likes = article_data['likes']
+            user_liked = user_id in liked_by
+            
+            # Toggle like status
+            if user_liked:
+                # Unlike: remove user from liked_by and decrease count
+                liked_by.remove(user_id)
+                current_likes = max(0, current_likes - 1)
+                new_user_liked = False
+            else:
+                # Like: add user to liked_by and increase count
+                if user_id not in liked_by:
+                    liked_by.append(user_id)
+                current_likes += 1
+                new_user_liked = True
+            
+            # Update the document
+            transaction.set(article_ref, {
+                'likes': current_likes,
+                'liked_by': liked_by,
+                'updated_at': firestore.SERVER_TIMESTAMP
+            })
+            
+            return {
+                'likes': current_likes,
+                'user_liked': new_user_liked
+            }
         
-        # Sort articles by comment count
-        article_comment_counts.sort(key=lambda x: x['comment_count'], reverse=True)
-        stats['top_commented_articles'] = article_comment_counts[:10]
+        # Execute the transaction
+        transaction = db.transaction()
+        result = update_article_like(transaction)
         
-        return jsonify(stats)
+        return jsonify({
+            'success': True,
+            **result
+        })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error handling article like: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/article-likes', methods=['GET'])
+def get_article_likes():
+    """Get like count and user like status for an article"""
+    try:
+        article_id = request.args.get('article_id')
+        if not article_id:
+            return jsonify({'error': 'Missing article_id parameter'}), 400
+        
+        user_id = get_user_id()
+        
+        # Get article likes document
+        article_ref = db.collection('article_likes').document(article_id)
+        article_doc = article_ref.get()
+        
+        if not article_doc.exists:
+            return jsonify({
+                'likes': 0,
+                'user_liked': False
+            })
+        
+        article_data = article_doc.to_dict()
+        liked_by = article_data.get('liked_by', [])
+        
+        return jsonify({
+            'likes': article_data.get('likes', 0),
+            'user_liked': user_id in liked_by
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting article likes: {str(e)}")
+        return jsonify({'error': 'Failed to get article likes'}), 500
 @app.route('/privacy-policy')
 def privacy_policy():
     return render_template('privacy-policy.html')
@@ -849,7 +906,7 @@ def newsletter_subscribe():
         return jsonify({'error': 'Failed to save subscription.'}), 500
 
 
-app.route('/api/news/voice-optimize', methods=['POST'])
+@app.route('/api/news/voice-optimize', methods=['POST'])
 def optimize_article_for_voice():
     data = request.json
 
@@ -1077,6 +1134,8 @@ def get_task_status(task_id):
             'error': str(e),
             'message': 'Task failed'
         })
+
+
 # Call cleanup periodically (you can set this up with a scheduler)
 # cleanup_old_files()
 if __name__ == '__main__':

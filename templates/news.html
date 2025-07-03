@@ -174,7 +174,7 @@
       </p>
 
       <!-- Article Image -->
-      <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 120px; object-fit: cover; width: 100%;" />
+      <img src="" alt="Article Image" class="article-image img-fluid mb-2" style="height: 200px; object-fit: cover; width: 100%;" />
 
       <!-- Description -->
       <p class="article-description flex-grow-1 mb-2" style="font-size: 0.9em; min-height: 5em; line-height: 1.4;">Article description goes here...</p>
@@ -204,39 +204,92 @@
         <!-- Progress bar -->
         <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
 
-        <!-- UPDATED: Comments with Voting Support -->
-        <div class="article-comments w-100 mt-3" data-article-id="ARTICLE_ID">
-          <!-- Comments header will be added dynamically by JavaScript -->
+        <!-- INSTAGRAM-STYLE INTERACTIONS WITH SVG ICONS -->
+        <div class="article-interactions w-100 mt-3" data-article-id="ARTICLE_ID">
           
-          <div class="comments-list-container border-top border-bottom py-2 mb-3 bg-light" 
-               style="max-height: 200px; overflow-y: auto;">
-            <div class="comments-list">
-              <p class="text-muted text-center py-3" style="font-size: 0.8em;">Loading comments...</p>
+          <!-- Like, Comment & Share Actions (Instagram Style) -->
+          <div class="interaction-buttons d-flex align-items-center justify-content-center gap-4 mb-2 px-1">
+            
+            <!-- Heart Like Button with Count -->
+            <div class="like-section d-flex align-items-center gap-2">
+              <button class="like-btn d-flex align-items-center" 
+                      title="Like this article">
+                <svg class="heart-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              </button>
+              <span class="like-count-text" style="font-size: 0.85em; font-weight: 600; display: none; color: var(--text-color);">
+                <span class="like-count">0</span>
+              </span>
             </div>
+            
+            <!-- Comment Toggle Button with SVG -->
+            <button class="comment-btn d-flex align-items-center gap-1" 
+                    title="View comments">
+              <svg class="comment-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </button>
+
+       <!-- Share Button with Flaticon Icon -->
+<!-- Share Button with Flaticon Icon -->
+<!-- Share Button with New SVG Icon -->
+<!-- Share Button with Flaticon-style SVG -->
+<!-- Share Button - Clean, No Background -->
+<button class="share-btn d-flex align-items-center p-0 border-0 bg-transparent" title="Share this article">
+  <svg class="share-icon" width="24" height="24" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+    <polyline points="16 6 12 2 8 6" />
+    <line x1="12" y1="2" x2="12" y2="15" />
+  </svg>
+</button>
+
+
+
+
           </div>
 
-          <form class="comment-form w-100 d-flex align-items-center gap-2">
-            <input type="text" name="nickname" placeholder="Your name (optional)" 
-                   class="form-control form-control-sm flex-grow-1" 
-                   style="font-size: 0.85em;" maxlength="50" />
-            <textarea name="comment" placeholder="Add a comment..." rows="1" 
-                      class="form-control form-control-sm border-0 flex-grow-1" 
-                      style="resize: none; background-color: transparent; font-size: 0.85em;" 
-                      maxlength="500" required></textarea>
-            <button type="submit" 
-                    class="btn btn-link btn-sm text-decoration-none text-primary fw-bold p-0" 
-                    style="white-space: nowrap; font-size: 0.8em;">
-                Post
-            </button>
-          </form>
-        </div>
+          <!-- Comments Container (Initially Hidden) -->
+          <div class="comments-container" style="display: none;">
+            
+            <!-- Comments List -->
+            <div class="comments-list-container border-top py-2 mb-2" 
+                 style="max-height: 200px; overflow-y: auto;">
+              <div class="comments-list">
+                <p class="text-muted text-center py-3" style="font-size: 0.8em;">
+                  No comments yet. Be the first to comment!
+                </p>
+              </div>
+            </div>
+
+            <!-- Comment Form -->
+            <form class="comment-form w-100">
+              <div class="d-flex gap-2 align-items-center">
+                <input type="text" name="nickname" placeholder="Your name (optional)" 
+                       class="form-control form-control-sm" 
+                       style="font-size: 0.85em; flex: 0 0 120px;" maxlength="50" />
+                <input type="text" name="comment" placeholder="Add a comment..." 
+                       class="form-control form-control-sm flex-grow-1" 
+                       style="font-size: 0.85em;" 
+                       maxlength="500" required />
+                <button type="submit" 
+                        class="btn btn-link btn-sm text-primary fw-bold p-1" 
+                        style="font-size: 0.8em; white-space: nowrap;">
+                    Post
+                </button>
+              </div>
+            </form>
+
+          </div> <!-- End comments container -->
+
+        </div> <!-- End article-interactions -->
 
       </div> <!-- End actions -->
 
     </div>
   </article>
 </template>
-
 <!-- ADD this CSS to your news.html file (in a <style> tag in the <head> section) -->
 <style>
 /* Additional styles for voting system - ADD these to your existing styles */

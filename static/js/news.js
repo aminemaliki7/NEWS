@@ -458,9 +458,12 @@ function displayNews(articlesData) {
     });
 }
 
+// Updated createArticleElement function - REPLACE the existing one in your JavaScript file
+
+// FIXED: Update createArticleElement to use correct selector
 function createArticleElement(article, index) {
     const template = newsTemplate.content.cloneNode(true);
-    const t = translations.en; // Always use English translations for UI text within the article card
+    const t = translations.en;
 
     template.querySelector('.article-title').textContent = article.title || 'No Title';
     template.querySelector('.source-name').textContent = article.source?.name || t.unknownSource;
@@ -478,45 +481,34 @@ function createArticleElement(article, index) {
 
     const readBtn = template.querySelector('.article-read-btn');
     readBtn.href = article.url;
-    readBtn.title = t.readFull; // Using title for tooltip
+    readBtn.title = t.readFull;
 
     const listenBtn = template.querySelector('.article-listen-btn');
     listenBtn.dataset.index = index;
-    listenBtn.innerHTML = '▶︎ '; // Ensure space for icon
-    listenBtn.title = t.listen; // Set tooltip
+    listenBtn.innerHTML = '▶︎ ';
+    listenBtn.title = t.listen;
     listenBtn.onclick = () => listenToSummary(index);
 
     const voiceSelect = template.querySelector('.voice-select');
     voiceSelect.id = `voice-select-${index}`;
     voiceSelect.dataset.articleIndex = index;
-    voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural'; // Default to an English voice
+    voiceSelect.value = localStorage.getItem('lastVoice') || 'en-CA-LiamNeural';
 
     const progress = template.querySelector('.audio-progress');
     progress.style.display = 'none';
     progress.value = 0;
 
-    // Generate unique article_id based on URL (safe for Firestore)
+    // Generate unique article_id
     const articleId = btoa(article.url || article.title || article.publishedAt || `${index}`);
     
-    // UPDATE: Add comments header to the comments section
-    const commentsSection = template.querySelector('.article-comments');
-    commentsSection.dataset.articleId = articleId;
-    
-    // Add comments header if it doesn't exist
-    if (!commentsSection.querySelector('.comments-header')) {
-        const commentsContainer = commentsSection.querySelector('.comments-list-container');
-        const commentsHeader = document.createElement('div');
-        commentsHeader.className = 'comments-header d-flex justify-content-between align-items-center py-2 border-bottom mb-2';
-        commentsHeader.innerHTML = `
-            <h6 class="mb-0" style="font-size: 0.9em; font-weight: 600;"></h6>
-            <span class="sort-indicator text-muted" style="font-size: 0.75em; font-style: italic;"></span>
-        `;
-        commentsSection.insertBefore(commentsHeader, commentsContainer);
+    // FIXED: Set article ID for the interactions section
+    const interactionsSection = template.querySelector('.article-interactions');
+    if (interactionsSection) {
+        interactionsSection.dataset.articleId = articleId;
     }
 
     return template;
 }
-
 function stopActiveAudio() {
     if (activeAudio) {
         activeAudio.pause();
@@ -972,8 +964,294 @@ function logAudioPerformance(action, startTime, additionalData = {}) {
     // You could send this data to analytics if needed
     // analytics.track('audio_performance', { action, duration, ...additionalData });
 }
+// Updated: Handle article like with number-only count
+async function handleArticleLike(articleId, likeBtn, likeCountEl) {
+    if (likeBtn.classList.contains('loading')) return;
+    
+    likeBtn.classList.add('loading');
+    const heartIcon = likeBtn.querySelector('.heart-icon');
+    const isLiked = likeBtn.classList.contains('liked');
+    
+    try {
+        const response = await fetch('/api/article-like', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                article_id: articleId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Update UI with Instagram-style animation
+        if (result.user_liked) {
+            likeBtn.classList.add('liked');
+        } else {
+            likeBtn.classList.remove('liked');
+        }
+        
+        // Update like count - JUST THE NUMBER
+        const likeCount = result.likes || 0;
+        if (likeCountEl) {
+            likeCountEl.textContent = likeCount;
+        }
+        
+        // Show/hide like count text
+        const likeText = likeCountEl ? likeCountEl.parentElement : null;
+        if (likeText) {
+            if (likeCount === 0) {
+                likeText.style.display = 'none';
+            } else {
+                // Just show the number, no "like" or "likes" text
+                likeCountEl.textContent = likeCount;
+                likeText.style.display = 'inline';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Like error:', error);
+        heartIcon.style.stroke = '#ff0000';
+        setTimeout(() => {
+            heartIcon.style.stroke = '';
+        }, 1000);
+        
+    } finally {
+        likeBtn.classList.remove('loading');
+    }
+}
 
-// UPDATED: Load comments for one article with voting support
+// Updated: Load like count with number-only display
+async function loadLikeCount(articleId, likeCountEl) {
+    try {
+        const response = await fetch(`/api/article-likes?article_id=${encodeURIComponent(articleId)}`);
+        const data = await response.json();
+        
+        if (data.likes !== undefined) {
+            const likeCount = data.likes || 0;
+            if (likeCountEl) {
+                likeCountEl.textContent = likeCount;
+            }
+            
+            // Show/hide like count - JUST THE NUMBER
+            const likeText = likeCountEl ? likeCountEl.parentElement : null;
+            if (likeText) {
+                if (likeCount === 0) {
+                    likeText.style.display = 'none';
+                } else {
+                    // Just show the number
+                    likeCountEl.textContent = likeCount;
+                    likeText.style.display = 'inline';
+                }
+            }
+            
+            // Set heart state
+            const container = likeCountEl ? likeCountEl.closest('.article-interactions') : null;
+            if (container) {
+                const likeBtn = container.querySelector('.like-btn');
+                if (likeBtn) {
+                    if (data.user_liked) {
+                        likeBtn.classList.add('liked');
+                    } else {
+                        likeBtn.classList.remove('liked');
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading like count:', error);
+    }
+}
+
+// Updated: Setup with correct selector for new structure
+function setupCommentForms() {
+    document.querySelectorAll('.article-interactions').forEach(container => {
+        const articleId = container.dataset.articleId;
+        const likeBtn = container.querySelector('.like-btn');
+        const commentBtn = container.querySelector('.comment-btn');
+        const shareBtn = container.querySelector('.share-btn');
+        const commentsContainer = container.querySelector('.comments-container');
+        const form = container.querySelector('.comment-form');
+        // Updated selector for new structure
+        const likeCountEl = container.querySelector('.like-section .like-count');
+
+        // Load initial like count
+        if (likeCountEl) {
+            loadLikeCount(articleId, likeCountEl);
+        }
+
+        // Setup like button
+        if (likeBtn) {
+            likeBtn.addEventListener('click', function() {
+                handleArticleLike(articleId, likeBtn, likeCountEl);
+            });
+        }
+
+        // ... rest of the function stays the same
+        // (comment button, share button, form submission code)
+    });
+}
+
+// NEW: Handle article share
+async function handleArticleShare(articleId, shareBtn) {
+    if (shareBtn.classList.contains('loading')) return;
+    
+    shareBtn.classList.add('loading');
+    shareBtn.classList.add('sharing');
+    
+    try {
+        // Get the article data for sharing
+        const articleIndex = parseInt(articleId) || 0;
+        const article = articles[articleIndex] || null;
+        
+        if (!article) {
+            throw new Error('Article not found');
+        }
+        
+        // Prepare share data
+        const shareData = {
+            title: article.title || 'Check out this news article',
+            text: article.description || '',
+            url: article.url || window.location.href
+        };
+        
+        // Try native Web Share API first (mobile)
+        if (navigator.share) {
+            await navigator.share(shareData);
+        } else {
+            // Fallback to clipboard copy (desktop)
+            const shareText = `${shareData.title}\n\n${shareData.text}\n\n${shareData.url}`;
+            
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(shareData.url);
+                showShareFeedback('Link copied to clipboard!');
+            } else {
+                // Final fallback - create temporary input
+                const tempInput = document.createElement('input');
+                tempInput.value = shareData.url;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showShareFeedback('Link copied!');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Share error:', error);
+        
+        // If user cancelled share, don't show error
+        if (error.name !== 'AbortError') {
+            showShareFeedback('Unable to share article', 'error');
+        }
+        
+    } finally {
+        shareBtn.classList.remove('loading');
+        setTimeout(() => {
+            shareBtn.classList.remove('sharing');
+        }, 600);
+    }
+}
+
+// NEW: Show share feedback
+function showShareFeedback(message, type = 'success') {
+    // Remove existing feedback
+    const existingFeedback = document.querySelector('.share-feedback');
+    if (existingFeedback) {
+        existingFeedback.remove();
+    }
+    
+    // Create feedback element
+    const feedback = document.createElement('div');
+    feedback.className = `share-feedback ${type}`;
+    feedback.textContent = message;
+    feedback.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'error' ? '#ff4444' : '#28a745'};
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 600;
+        z-index: 10000;
+        animation: fadeInOut 3s ease-in-out forwards;
+        font-family: 'Times New Roman', Times, serif;
+    `;
+    
+    // Add CSS animation
+    if (!document.getElementById('share-feedback-styles')) {
+        const style = document.createElement('style');
+        style.id = 'share-feedback-styles';
+        style.textContent = `
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateY(-10px); }
+                15% { opacity: 1; transform: translateY(0); }
+                85% { opacity: 1; transform: translateY(0); }
+                100% { opacity: 0; transform: translateY(-10px); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(feedback);
+    
+    // Remove after animation
+    setTimeout(() => {
+        if (feedback.parentNode) {
+            feedback.remove();
+        }
+    }, 3000);
+}
+
+// Updated: Load like count with SVG icon state
+async function loadLikeCount(articleId, likeCountEl) {
+    try {
+        const response = await fetch(`/api/article-likes?article_id=${encodeURIComponent(articleId)}`);
+        const data = await response.json();
+        
+        if (data.likes !== undefined) {
+            const likeCount = data.likes || 0;
+            if (likeCountEl) {
+                likeCountEl.textContent = likeCount;
+            }
+            
+            // Update like text and visibility
+            const likeText = likeCountEl ? likeCountEl.parentElement : null;
+            if (likeText) {
+                if (likeCount === 0) {
+                    likeText.style.display = 'none';
+                } else if (likeCount === 1) {
+                    likeText.innerHTML = `<span class="like-count">${likeCount}</span> like`;
+                    likeText.style.display = 'block';
+                } else {
+                    likeText.innerHTML = `<span class="like-count">${likeCount}</span> likes`;
+                    likeText.style.display = 'block';
+                }
+            }
+            
+            // Set heart state
+            const container = likeCountEl ? likeCountEl.closest('.article-interactions') : null;
+            if (container) {
+                const likeBtn = container.querySelector('.like-btn');
+                if (likeBtn) {
+                    if (data.user_liked) {
+                        likeBtn.classList.add('liked');
+                    } else {
+                        likeBtn.classList.remove('liked');
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading like count:', error);
+    }
+}
+
 function loadComments(articleId, container) {
     fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
         .then(response => response.json())
@@ -987,23 +1265,133 @@ function loadComments(articleId, container) {
                         No comments yet. Be the first to comment!
                     </p>`;
             } else if (data.comments) {
-                // Comments are already sorted by score from the backend
                 data.comments.forEach(comment => {
-                    const commentEl = createCommentElement(comment);
+                    const commentEl = createInstagramComment(comment);
                     commentsList.appendChild(commentEl);
                 });
             }
         })
         .catch(err => {
             console.error('Error loading comments:', err);
-            const commentsList = container.querySelector('.comments-list');
-            commentsList.innerHTML = `
-                <p class="text-muted text-center py-3" style="font-size: 0.8em;">
-                    Error loading comments.
-                </p>`;
         });
 }
-
+// Updated: Create Instagram-style comment element
+function createInstagramComment(comment) {
+    const commentEl = document.createElement('div');
+    commentEl.className = 'comment';
+    commentEl.dataset.commentId = comment.id;
+    
+    const likes = comment.likes || 0;
+    const userLiked = comment.userLiked || false;
+    
+    // Handle timestamp (Instagram style - shorter)
+    let formattedDate = 'now';
+    if (comment.timestamp) {
+        try {
+            const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - date) / (1000 * 60));
+            
+            if (diffMinutes < 1) {
+                formattedDate = 'now';
+            } else if (diffMinutes < 60) {
+                formattedDate = `${diffMinutes}m`;
+            } else if (diffMinutes < 1440) {
+                formattedDate = `${Math.floor(diffMinutes / 60)}h`;
+            } else {
+                formattedDate = `${Math.floor(diffMinutes / 1440)}d`;
+            }
+        } catch (e) {
+            formattedDate = 'now';
+        }
+    }
+    
+    commentEl.innerHTML = `
+        <div class="comment-header">
+            <span class="comment-nickname">${escapeHtml(comment.nickname || 'Anonymous')}</span>
+            <span class="comment-timestamp">${formattedDate}</span>
+        </div>
+        
+        <div class="comment-content">
+            <div class="comment-text">${escapeHtml(comment.comment)}</div>
+        </div>
+        
+        <div class="comment-actions">
+            <button class="comment-like-btn ${userLiked ? 'liked' : ''}" 
+                    title="${userLiked ? 'Unlike' : 'Like'}">
+                Like
+            </button>
+            ${likes > 0 ? `<span class="comment-like-count">${likes} ${likes === 1 ? 'like' : 'likes'}</span>` : ''}
+        </div>
+    `;
+    
+    // Add event listener for comment like
+    const likeBtn = commentEl.querySelector('.comment-like-btn');
+    likeBtn.addEventListener('click', () => handleCommentLike(commentEl));
+    
+    return commentEl;
+}
+// FIXED: Update handleCommentLike to use correct selector
+async function handleCommentLike(commentElement) {
+    const commentId = commentElement.dataset.commentId;
+    const articleId = commentElement.closest('.article-interactions').dataset.articleId;
+    const likeBtn = commentElement.querySelector('.comment-like-btn');
+    
+    if (likeBtn.disabled) return;
+    
+    likeBtn.disabled = true;
+    likeBtn.style.opacity = '0.6';
+    
+    try {
+        const response = await fetch('/api/comment-like', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                comment_id: commentId,
+                article_id: articleId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Update button state
+        const isLiked = result.user_liked;
+        const newLikeCount = result.likes || 0;
+        
+        if (isLiked) {
+            likeBtn.classList.add('liked');
+            likeBtn.textContent = 'Unlike';
+        } else {
+            likeBtn.classList.remove('liked');
+            likeBtn.textContent = 'Like';
+        }
+        
+        // Update like count display
+        const actions = commentElement.querySelector('.comment-actions');
+        let likeCountEl = actions.querySelector('.comment-like-count');
+        
+        if (newLikeCount > 0) {
+            if (!likeCountEl) {
+                likeCountEl = document.createElement('span');
+                likeCountEl.className = 'comment-like-count';
+                actions.appendChild(likeCountEl);
+            }
+            likeCountEl.textContent = `${newLikeCount} ${newLikeCount === 1 ? 'like' : 'likes'}`;
+        } else if (likeCountEl) {
+            likeCountEl.remove();
+        }
+        
+    } catch (error) {
+        console.error('Comment like error:', error);
+    } finally {
+        likeBtn.disabled = false;
+        likeBtn.style.opacity = '';
+    }
+}
 // Helper function to escape HTML and prevent XSS
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -1014,14 +1402,12 @@ function escapeHtml(text) {
 // UPDATED: Create comment element with voting buttons
 function createCommentElement(comment) {
     const commentEl = document.createElement('div');
-    commentEl.className = 'comment text-start mb-2 px-2';
+    commentEl.className = 'comment text-start mb-1';
     commentEl.dataset.commentId = comment.id;
     
-    // Calculate score and determine class
-    const upvotes = comment.upvotes || 0;
-    const downvotes = comment.downvotes || 0;
-    const score = upvotes - downvotes;
-    const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : '';
+    // Calculate likes count
+    const likes = comment.likes || 0;
+    const userLiked = comment.userLiked || false;
     
     // Handle timestamp
     let formattedDate = 'Just now';
@@ -1040,63 +1426,54 @@ function createCommentElement(comment) {
     }
     
     commentEl.innerHTML = `
-        <div class="comment-header d-flex justify-content-between align-items-start mb-1">
-            <div class="comment-meta d-flex align-items-center gap-2">
-                <span class="fw-bold comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname || 'Anonymous')}</span>
-                <small class="text-muted comment-timestamp" style="font-size: 0.7em;">${formattedDate}</small>
+        <div class="comment-header">
+            <div class="comment-meta">
+                <span class="comment-nickname">${escapeHtml(comment.nickname || 'Anonymous')}</span>
+                <small class="comment-timestamp">${formattedDate}</small>
             </div>
-            <div class="comment-score ${scoreClass}" style="font-size: 0.75em; font-weight: 600; min-width: 20px; text-align: center;">${score}</div>
         </div>
         
-        <div class="comment-content mb-2">
-            <div class="comment-text text-dark" style="font-size: 0.8em; line-height: 1.4;">${escapeHtml(comment.comment)}</div>
+        <div class="comment-content">
+            <div class="comment-text">${escapeHtml(comment.comment)}</div>
         </div>
         
-        <div class="comment-actions d-flex align-items-center gap-1">
-            <button class="vote-btn upvote ${comment.userVote === 'up' ? 'active' : ''}" 
-                    data-vote="up" title="Upvote">
-                ▲
-            </button>
-            <button class="vote-btn downvote ${comment.userVote === 'down' ? 'active' : ''}" 
-                    data-vote="down" title="Downvote">
-                ▼
+        <div class="comment-actions">
+            <button class="like-btn ${userLiked ? 'liked' : ''}" 
+                    title="${userLiked ? 'Unlike' : 'Like'} this comment">
+                <span class="heart-icon">${userLiked ? '❤️' : '🤍'}</span>
+                <span class="like-count">${likes > 0 ? likes : ''}</span>
             </button>
         </div>
     `;
     
-    // Add event listeners for voting
-    const upvoteBtn = commentEl.querySelector('.vote-btn.upvote');
-    const downvoteBtn = commentEl.querySelector('.vote-btn.downvote');
-    
-    upvoteBtn.addEventListener('click', () => handleVote(commentEl, 'up'));
-    downvoteBtn.addEventListener('click', () => handleVote(commentEl, 'down'));
+    // Add event listener for heart like
+    const likeBtn = commentEl.querySelector('.like-btn');
+    likeBtn.addEventListener('click', () => handleLike(commentEl));
     
     return commentEl;
 }
 
-// NEW: Handle voting on comments
-async function handleVote(commentElement, voteType) {
+async function handleLike(commentElement) {
     const commentId = commentElement.dataset.commentId;
     const articleId = commentElement.closest('.article-comments').dataset.articleId;
-    const voteBtn = commentElement.querySelector(`.vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
-    const otherBtn = commentElement.querySelector(`.vote-btn.${voteType === 'up' ? 'downvote' : 'upvote'}`);
+    const likeBtn = commentElement.querySelector('.like-btn');
+    const heartIcon = likeBtn.querySelector('.heart-icon');
+    const likeCount = likeBtn.querySelector('.like-count');
     
     // Prevent double-clicking
-    if (voteBtn.disabled) return;
+    if (likeBtn.disabled) return;
     
     // Show loading state
-    voteBtn.disabled = true;
-    otherBtn.disabled = true;
-    voteBtn.style.opacity = '0.6';
+    likeBtn.disabled = true;
+    likeBtn.style.opacity = '0.6';
     
     try {
-        const response = await fetch('/api/comment-vote', {
+        const response = await fetch('/api/comment-like', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 comment_id: commentId,
-                article_id: articleId,
-                vote_type: voteType
+                article_id: articleId
             })
         });
         
@@ -1106,10 +1483,26 @@ async function handleVote(commentElement, voteType) {
             throw new Error(result.error);
         }
         
-        // Update UI with new vote state
-        updateVoteUI(commentElement, result);
+        // Update UI with new like state
+        const isLiked = result.user_liked;
+        const newLikeCount = result.likes || 0;
         
-        // Re-sort comments after a short delay
+        // Update heart icon
+        heartIcon.textContent = isLiked ? '❤️' : '🤍';
+        
+        // Update like count
+        likeCount.textContent = newLikeCount > 0 ? newLikeCount : '';
+        
+        // Update button state
+        if (isLiked) {
+            likeBtn.classList.add('liked');
+            likeBtn.title = 'Unlike this comment';
+        } else {
+            likeBtn.classList.remove('liked');
+            likeBtn.title = 'Like this comment';
+        }
+        
+        // Re-sort comments after a short delay (optional)
         setTimeout(() => {
             const container = commentElement.closest('.article-comments');
             if (container) {
@@ -1118,208 +1511,127 @@ async function handleVote(commentElement, voteType) {
         }, 500);
         
     } catch (error) {
-        console.error('Vote error:', error);
+        console.error('Like error:', error);
         // Show error feedback
-        voteBtn.style.background = 'rgba(255, 0, 0, 0.1)';
+        likeBtn.style.background = 'rgba(255, 0, 0, 0.1)';
         setTimeout(() => {
-            voteBtn.style.background = '';
+            likeBtn.style.background = '';
         }, 1000);
         
     } finally {
         // Remove loading state
-        voteBtn.disabled = false;
-        otherBtn.disabled = false;
-        voteBtn.style.opacity = '';
+        likeBtn.disabled = false;
+        likeBtn.style.opacity = '';
     }
 }
-
-// NEW: Update vote UI after successful vote
-function updateVoteUI(commentElement, voteResult) {
-    const upvoteBtn = commentElement.querySelector('.vote-btn.upvote');
-    const downvoteBtn = commentElement.querySelector('.vote-btn.downvote');
-    const scoreEl = commentElement.querySelector('.comment-score');
-    
-    // Remove active state from both buttons
-    upvoteBtn.classList.remove('active');
-    downvoteBtn.classList.remove('active');
-    
-    // Set active state based on user's current vote
-    if (voteResult.user_vote === 'up') {
-        upvoteBtn.classList.add('active');
-    } else if (voteResult.user_vote === 'down') {
-        downvoteBtn.classList.add('active');
-    }
-    
-    // Update score display
-    const newScore = voteResult.score || 0;
-    scoreEl.textContent = newScore;
-    
-    // Update score styling
-    scoreEl.className = 'comment-score';
-    if (newScore > 0) {
-        scoreEl.classList.add('positive');
-    } else if (newScore < 0) {
-        scoreEl.classList.add('negative');
-    }
-}
-
-// NEW: Inject voting styles
+// Updated: Inject Instagram-style CSS
 function injectVotingStyles() {
-    if (document.getElementById('voting-styles')) return; // Don't inject twice
+    // This function name stays the same but now injects Instagram styles
+    if (document.getElementById('instagram-styles')) return;
     
-    const style = document.createElement('style');
-    style.id = 'voting-styles';
-    style.textContent = `
-        /* Comment voting styles */
-        .comment {
-            border-left: 2px solid var(--border-color);
-            margin: 8px 0;
-            padding: 8px 12px;
-            background: var(--card-bg);
-            transition: all 0.2s ease;
-            border-radius: 3px;
-        }
-
-        .comment:hover {
-            border-left-color: var(--text-color);
-            background: var(--editable-area-bg);
-        }
-
-        .vote-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 2px;
-            transition: all 0.2s ease;
-            color: var(--source-date-color);
-            font-size: 14px;
-            min-width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .vote-btn:hover {
-            background: var(--editable-area-bg);
-        }
-
-        .vote-btn.upvote:hover {
-            background: rgba(255, 69, 0, 0.1) !important;
-            color: #ff4500 !important;
-        }
-
-        .vote-btn.downvote:hover {
-            background: rgba(124, 77, 255, 0.1) !important;
-            color: #7c4dff !important;
-        }
-
-        .vote-btn.active.upvote {
-            color: #ff4500 !important;
-            background: rgba(255, 69, 0, 0.1) !important;
-        }
-
-        .vote-btn.active.downvote {
-            color: #7c4dff !important;
-            background: rgba(124, 77, 255, 0.1) !important;
-        }
-
-        .vote-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .comment-score.positive {
-            color: #ff4500;
-        }
-
-        .comment-score.negative {
-            color: #7c4dff;
-        }
-
-        .comments-header {
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 8px;
-            margin-bottom: 8px;
-        }
-
-        .sort-indicator {
-            font-size: 0.75em;
-            color: var(--source-date-color);
-            font-style: italic;
-        }
-    `;
-    document.head.appendChild(style);
+    // The CSS is now in the separate CSS file
+    // This function is kept for compatibility but doesn't inject styles
+    console.log('Instagram-style CSS should be loaded from external file');
 }
 
-// Setup comment form submit - IMPROVED VERSION (without success message)
+// FIXED: Updated setupCommentForms to use correct selectors
 function setupCommentForms() {
-    document.querySelectorAll('.article-comments').forEach(container => {
+    document.querySelectorAll('.article-interactions').forEach(container => {
         const articleId = container.dataset.articleId;
+        const likeBtn = container.querySelector('.like-btn');
+        const commentBtn = container.querySelector('.comment-btn');
+        const shareBtn = container.querySelector('.share-btn');
+        const commentsContainer = container.querySelector('.comments-container');
         const form = container.querySelector('.comment-form');
+        const likeCountEl = container.querySelector('.like-count');
 
-        // Load comments on page load
-        loadComments(articleId, container);
+        // Load initial like count
+        if (likeCountEl) {
+            loadLikeCount(articleId, likeCountEl);
+        }
 
-        const newForm = form.cloneNode(true);
-        form.parentNode.replaceChild(newForm, form);
-        
-        newForm.addEventListener('submit', e => {
-            e.preventDefault();
-
-            const nickname = newForm.nickname.value.trim();
-            const commentText = newForm.comment.value.trim();
-            const submitBtn = newForm.querySelector('button[type="submit"]');
-
-            if (!commentText) {
-                alert('Please enter a comment before posting.');
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Posting...';
-
-            // Build payload
-            const payload = {
-                article_id: articleId,
-                comment_text: commentText
-            };
-
-            if (nickname) {
-                payload.nickname = nickname;  // only send if filled
-            }
-
-            fetch('/api/article-comment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) throw new Error(data.error);
-                newForm.reset();
-                loadComments(articleId, container);
-            })
-            .catch(err => {
-                console.error('Error posting comment:', err);
-                alert('Error posting comment. Please try again.');
-            })
-            .finally(() => {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Post';
+        // Setup like button
+        if (likeBtn) {
+            likeBtn.addEventListener('click', function() {
+                handleArticleLike(articleId, likeBtn, likeCountEl);
             });
-        });
+        }
+
+        // Setup comment toggle button
+        if (commentBtn && commentsContainer) {
+            commentBtn.addEventListener('click', function() {
+                const isVisible = commentsContainer.style.display !== 'none';
+                
+                if (isVisible) {
+                    // Hide comments
+                    commentsContainer.style.display = 'none';
+                    commentBtn.classList.remove('active');
+                } else {
+                    // Show comments and load them
+                    commentsContainer.style.display = 'block';
+                    commentBtn.classList.add('active');
+                    loadComments(articleId, container);
+                }
+            });
+        }
+
+        // Setup share button
+        if (shareBtn) {
+            shareBtn.addEventListener('click', function() {
+                handleArticleShare(articleId, shareBtn);
+            });
+        }
+
+        // Setup form submission
+        if (form) {
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', e => {
+                e.preventDefault();
+
+                const nickname = newForm.nickname.value.trim();
+                const commentText = newForm.comment.value.trim();
+                const submitBtn = newForm.querySelector('button[type="submit"]');
+
+                if (!commentText) {
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Posting...';
+
+                const payload = {
+                    article_id: articleId,
+                    comment_text: commentText
+                };
+
+                if (nickname) {
+                    payload.nickname = nickname;
+                }
+
+                fetch('/api/article-comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    newForm.reset();
+                    loadComments(articleId, container);
+                })
+                .catch(err => {
+                    console.error('Error posting comment:', err);
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Post';
+                });
+            });
+        }
     });
 }
-
-// Add window resize listener to recalculate layout when screen size changes
-window.addEventListener('resize', debounce(() => {
-    if (articles.length > 0) {
-        displayNews(articles);
-        setupCommentForms(); // Re-setup comment forms after re-rendering
-    }
-}, 300));
 
 // Add this JavaScript to your existing news.js file
 
