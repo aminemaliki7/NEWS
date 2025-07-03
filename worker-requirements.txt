@@ -1,0 +1,19 @@
+# Core Dramatiq dependencies
+dramatiq[redis]==1.18.0
+redis==4.5.4
+
+# Environment config
+python-dotenv
+
+# TTS generation (for generate_tts_task)
+edge-tts
+pydub
+
+# News fetching (for fetch_article_content_task & cache_news_task)
+requests
+beautifulsoup4
+html5lib
+feedparser
+
+# Text processing
+nltk

@@ -204,18 +204,30 @@
         <!-- Progress bar -->
         <progress class="audio-progress mt-2 w-100" value="0" max="100" style="display: none; height: 4px; border-radius: 2px;"></progress>
 
-        <!-- Comments -->
+        <!-- UPDATED: Comments with Voting Support -->
         <div class="article-comments w-100 mt-3" data-article-id="ARTICLE_ID">
-          <div class="comments-list-container border-top border-bottom py-2 mb-3 bg-light" style="max-height: 160px; overflow-y: auto;">
+          <!-- Comments header will be added dynamically by JavaScript -->
+          
+          <div class="comments-list-container border-top border-bottom py-2 mb-3 bg-light" 
+               style="max-height: 200px; overflow-y: auto;">
             <div class="comments-list">
               <p class="text-muted text-center py-3" style="font-size: 0.8em;">Loading comments...</p>
             </div>
           </div>
 
           <form class="comment-form w-100 d-flex align-items-center gap-2">
-            <input type="text" name="nickname" placeholder="Your name (optional)" class="form-control form-control-sm flex-grow-1" style="font-size: 0.85em;" maxlength="50" />
-            <textarea name="comment" placeholder="Add a comment..." rows="1" class="form-control form-control-sm border-0 flex-grow-1" style="resize: none; background-color: transparent; font-size: 0.85em;" maxlength="500" required></textarea>
-            <button type="submit" class="btn btn-link btn-sm text-decoration-none text-primary fw-bold p-0" style="white-space: nowrap; font-size: 0.8em;">Post</button>
+            <input type="text" name="nickname" placeholder="Your name (optional)" 
+                   class="form-control form-control-sm flex-grow-1" 
+                   style="font-size: 0.85em;" maxlength="50" />
+            <textarea name="comment" placeholder="Add a comment..." rows="1" 
+                      class="form-control form-control-sm border-0 flex-grow-1" 
+                      style="resize: none; background-color: transparent; font-size: 0.85em;" 
+                      maxlength="500" required></textarea>
+            <button type="submit" 
+                    class="btn btn-link btn-sm text-decoration-none text-primary fw-bold p-0" 
+                    style="white-space: nowrap; font-size: 0.8em;">
+                Post
+            </button>
           </form>
         </div>
 
@@ -225,6 +237,239 @@
   </article>
 </template>
 
+<!-- ADD this CSS to your news.html file (in a <style> tag in the <head> section) -->
+<style>
+/* Additional styles for voting system - ADD these to your existing styles */
+
+/* Comment voting styles */
+.comment {
+  border-left: 2px solid var(--border-color);
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  transition: all 0.2s ease;
+  border-radius: 3px;
+}
+
+.comment:hover {
+  border-left-color: var(--text-color);
+  background: var(--editable-area-bg);
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75em;
+  color: var(--source-date-color);
+}
+
+.comment-nickname {
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.comment-score {
+  font-weight: 600;
+  color: var(--text-color);
+  min-width: 20px;
+  text-align: center;
+  font-size: 0.75em;
+}
+
+.comment-score.positive {
+  color: #ff4500; /* Reddit orange for positive scores */
+}
+
+.comment-score.negative {
+  color: #7c4dff; /* Purple for negative scores */
+}
+
+.comment-content {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.comment-text {
+  font-size: 0.85em;
+  color: var(--text-color);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.vote-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  color: var(--source-date-color);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+}
+
+.vote-btn:hover {
+  background: var(--editable-area-bg);
+}
+
+.vote-btn.upvote:hover {
+  background: rgba(255, 69, 0, 0.1);
+  color: #ff4500;
+}
+
+.vote-btn.downvote:hover {
+  background: rgba(124, 77, 255, 0.1);
+  color: #7c4dff;
+}
+
+.vote-btn.active.upvote {
+  color: #ff4500;
+  background: rgba(255, 69, 0, 0.1);
+}
+
+.vote-btn.active.downvote {
+  color: #7c4dff;
+  background: rgba(124, 77, 255, 0.1);
+}
+
+.vote-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading state for voting */
+.vote-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.vote-btn.loading::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: vote-spinner 0.8s linear infinite;
+}
+
+@keyframes vote-spinner {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Comment sorting indicator */
+.comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.sort-indicator {
+  font-size: 0.75em;
+  color: var(--source-date-color);
+  font-style: italic;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .comment {
+    padding: 6px 8px;
+    margin: 6px 0;
+  }
+  
+  .comment-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .vote-btn {
+    min-width: 28px;
+    height: 28px;
+    font-size: 18px;
+  }
+  
+  .comment-meta {
+    flex-wrap: wrap;
+  }
+}
+
+/* Dark mode specific adjustments */
+body.dark-mode .comment {
+  border-left-color: var(--border-color);
+}
+
+body.dark-mode .comment:hover {
+  border-left-color: var(--text-color);
+}
+
+/* Accessibility improvements */
+.vote-btn:focus {
+  outline: 2px solid var(--text-color);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .comment,
+  .vote-btn {
+    transition: none;
+  }
+  
+  .vote-btn.loading::after {
+    animation: none;
+  }
+}
+</style>
+
+<!-- IMPORTANT: Your existing HTML structure should remain the same -->
+<!-- Just replace the newsArticleTemplate and add the CSS above -->
+
+<!-- Your existing newsletter modal, FAQ section, etc. should stay exactly as they are -->
+<!-- The only change is the updated template and additional CSS styles -->
+
+<!-- EXAMPLE: How the comments will look after voting is implemented -->
+<!--
+<div class="comment" data-comment-id="abc123">
+  <div class="comment-header">
+    <div class="comment-meta">
+      <span class="comment-nickname">TechReader42</span>
+      <small class="comment-timestamp">2 hrs ago</small>
+    </div>
+    <div class="comment-score positive">+7</div>
+  </div>
+  
+  <div class="comment-content">
+    <div class="comment-text">Great article! Very informative.</div>
+  </div>
+  
+  <div class="comment-actions">
+    <button class="vote-btn upvote active" title="Upvote">▲</button>
+    <button class="vote-btn downvote" title="Downvote">▼</button>
+  </div>
+</div>
     <footer class="journal-footer text-center py-4 mt-5">
   <hr class="footer-separator">
   <small class="text-muted">

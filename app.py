@@ -22,6 +22,8 @@ import os
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
+from flask import request, session
+import hashlib
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -166,16 +168,30 @@ def post_comment():
         # Each article will be a collection
         doc_ref = db.collection('comments').document(article_id).collection('comments').document()
 
-        doc_ref.set({
+        # Updated comment structure with voting fields
+        comment_data = {
             'nickname': nickname,
             'comment': comment_text,
-            'timestamp': firestore.SERVER_TIMESTAMP
-        })
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'upvotes': 0,
+            'downvotes': 0,
+            'user_votes': {}  # Will store {user_id: 'up'/'down'}
+        }
+
+        doc_ref.set(comment_data)
 
         return jsonify({"message": "Comment posted", "nickname": nickname})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Add this helper function to generate user IDs based on IP
+def get_user_id():
+    """Generate a consistent user ID based on IP address for voting"""
+    user_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+    # Create a hash of IP + user agent for better uniqueness while maintaining anonymity
+    user_agent = request.headers.get('User-Agent', '')
+    user_string = f"{user_ip}:{user_agent}"
+    return hashlib.sha256(user_string.encode()).hexdigest()[:16]
 
 # API — Article Comment
 @app.route('/api/article-comments', methods=['GET'])
@@ -185,6 +201,8 @@ def get_comments():
         return jsonify({"error": "Missing article_id"}), 400
 
     try:
+        user_id = get_user_id()  # Get current user's ID for vote state
+        
         comments_ref = db.collection('comments').document(article_id).collection('comments')
         comments_snapshot = comments_ref.order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
 
@@ -192,13 +210,204 @@ def get_comments():
         for doc in comments_snapshot:
             comment = doc.to_dict()
             comment['id'] = doc.id
+            
+            # Add user's current vote state
+            user_votes = comment.get('user_votes', {})
+            comment['userVote'] = user_votes.get(user_id, None)
+            
+            # Ensure vote counts exist
+            comment['upvotes'] = comment.get('upvotes', 0)
+            comment['downvotes'] = comment.get('downvotes', 0)
+            
             comments.append(comment)
+
+        # Sort comments by score (upvotes - downvotes), highest first
+        comments.sort(key=lambda x: (x.get('upvotes', 0) - x.get('downvotes', 0)), reverse=True)
 
         return jsonify({"comments": comments})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/comment-vote', methods=['POST'])
+def vote_on_comment():
+    """Handle voting on comments"""
+    try:
+        data = request.json
+        comment_id = data.get('comment_id')
+        article_id = data.get('article_id')
+        vote_type = data.get('vote_type')  # 'up' or 'down'
 
+        if not comment_id or not article_id or vote_type not in ['up', 'down']:
+            return jsonify({"error": "Invalid vote data"}), 400
+
+        user_id = get_user_id()
+        
+        # Get reference to the comment
+        comment_ref = db.collection('comments').document(article_id).collection('comments').document(comment_id)
+        
+        # Use a transaction to ensure consistency
+        @firestore.transactional
+        def update_vote(transaction):
+            # Get current comment data
+            comment_doc = comment_ref.get(transaction=transaction)
+            if not comment_doc.exists:
+                raise ValueError("Comment not found")
+            
+            comment_data = comment_doc.to_dict()
+            user_votes = comment_data.get('user_votes', {})
+            current_vote = user_votes.get(user_id)
+            upvotes = comment_data.get('upvotes', 0)
+            downvotes = comment_data.get('downvotes', 0)
+            
+            # Calculate new vote state
+            if current_vote == vote_type:
+                # User is removing their vote
+                if vote_type == 'up':
+                    upvotes = max(0, upvotes - 1)
+                else:
+                    downvotes = max(0, downvotes - 1)
+                user_votes.pop(user_id, None)  # Remove user's vote
+                new_user_vote = None
+            else:
+                # User is changing or adding their vote
+                if current_vote == 'up':
+                    upvotes = max(0, upvotes - 1)
+                elif current_vote == 'down':
+                    downvotes = max(0, downvotes - 1)
+                
+                if vote_type == 'up':
+                    upvotes += 1
+                else:
+                    downvotes += 1
+                
+                user_votes[user_id] = vote_type
+                new_user_vote = vote_type
+            
+            # Update the document
+            transaction.update(comment_ref, {
+                'upvotes': upvotes,
+                'downvotes': downvotes,
+                'user_votes': user_votes
+            })
+            
+            return {
+                'upvotes': upvotes,
+                'downvotes': downvotes,
+                'score': upvotes - downvotes,
+                'user_vote': new_user_vote
+            }
+        
+        # Execute the transaction
+        transaction = db.transaction()
+        result = update_vote(transaction)
+        
+        return jsonify({
+            "success": True,
+            **result
+        })
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        app.logger.error(f"Error voting on comment: {str(e)}")
+        return jsonify({"error": "Failed to process vote"}), 500
+
+# Add a migration function to update existing comments (run this once)
+@app.route('/api/migrate-comments', methods=['POST'])
+def migrate_existing_comments():
+    """One-time migration to add voting fields to existing comments"""
+    try:
+        # This is a utility endpoint - you should protect it or remove it after migration
+        password = request.json.get('password') if request.json else None
+        if password != 'your_migration_password':  # Set a secure password
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        updated_count = 0
+        
+        # Get all articles that have comments
+        comments_collection = db.collection('comments')
+        articles = comments_collection.stream()
+        
+        for article_doc in articles:
+            article_id = article_doc.id
+            # Get all comments for this article
+            comments_ref = comments_collection.document(article_id).collection('comments')
+            comments = comments_ref.stream()
+            
+            for comment_doc in comments:
+                comment_data = comment_doc.to_dict()
+                
+                # Check if voting fields already exist
+                if 'upvotes' not in comment_data:
+                    # Add voting fields
+                    comment_doc.reference.update({
+                        'upvotes': 0,
+                        'downvotes': 0,
+                        'user_votes': {}
+                    })
+                    updated_count += 1
+        
+        return jsonify({
+            "message": f"Migration completed. Updated {updated_count} comments.",
+            "updated_count": updated_count
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Migration error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Optional: Add an admin endpoint to view comment statistics
+@app.route('/api/admin/comment-stats')
+def comment_statistics():
+    """Get statistics about comments and votes"""
+    try:
+        # Simple protection - you should implement proper admin authentication
+        admin_key = request.args.get('admin_key')
+        if admin_key != 'your_admin_key':  # Set a secure admin key
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        stats = {
+            'total_articles_with_comments': 0,
+            'total_comments': 0,
+            'total_votes': 0,
+            'top_commented_articles': []
+        }
+        
+        # Get all articles that have comments
+        comments_collection = db.collection('comments')
+        articles = comments_collection.stream()
+        
+        article_comment_counts = []
+        
+        for article_doc in articles:
+            article_id = article_doc.id
+            comments_ref = comments_collection.document(article_id).collection('comments')
+            comments = list(comments_ref.stream())
+            
+            if comments:
+                stats['total_articles_with_comments'] += 1
+                comment_count = len(comments)
+                stats['total_comments'] += comment_count
+                
+                article_comment_counts.append({
+                    'article_id': article_id,
+                    'comment_count': comment_count
+                })
+                
+                # Count total votes
+                for comment_doc in comments:
+                    comment_data = comment_doc.to_dict()
+                    stats['total_votes'] += comment_data.get('upvotes', 0) + comment_data.get('downvotes', 0)
+        
+        # Sort articles by comment count
+        article_comment_counts.sort(key=lambda x: x['comment_count'], reverse=True)
+        stats['top_commented_articles'] = article_comment_counts[:10]
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/privacy-policy')
 def privacy_policy():

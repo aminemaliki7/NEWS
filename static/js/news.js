@@ -71,6 +71,9 @@ document.addEventListener('DOMContentLoaded', function() {
     updateCurrentDate();
     setupEventListeners();
     loadNews();
+    
+    // Inject voting styles
+    injectVotingStyles();
 });
 
 // Event listeners
@@ -494,7 +497,22 @@ function createArticleElement(article, index) {
 
     // Generate unique article_id based on URL (safe for Firestore)
     const articleId = btoa(article.url || article.title || article.publishedAt || `${index}`);
-    template.querySelector('.article-comments').dataset.articleId = articleId;
+    
+    // UPDATE: Add comments header to the comments section
+    const commentsSection = template.querySelector('.article-comments');
+    commentsSection.dataset.articleId = articleId;
+    
+    // Add comments header if it doesn't exist
+    if (!commentsSection.querySelector('.comments-header')) {
+        const commentsContainer = commentsSection.querySelector('.comments-list-container');
+        const commentsHeader = document.createElement('div');
+        commentsHeader.className = 'comments-header d-flex justify-content-between align-items-center py-2 border-bottom mb-2';
+        commentsHeader.innerHTML = `
+            <h6 class="mb-0" style="font-size: 0.9em; font-weight: 600;"></h6>
+            <span class="sort-indicator text-muted" style="font-size: 0.75em; font-style: italic;"></span>
+        `;
+        commentsSection.insertBefore(commentsHeader, commentsContainer);
+    }
 
     return template;
 }
@@ -955,7 +973,7 @@ function logAudioPerformance(action, startTime, additionalData = {}) {
     // analytics.track('audio_performance', { action, duration, ...additionalData });
 }
 
-// Load comments for one article - FIXED VERSION
+// UPDATED: Load comments for one article with voting support
 function loadComments(articleId, container) {
     fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
         .then(response => response.json())
@@ -964,34 +982,14 @@ function loadComments(articleId, container) {
             commentsList.innerHTML = '';
 
             if (data.comments && data.comments.length === 0) {
-                commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">No comments yet. Be the first to comment!</p>';
+                commentsList.innerHTML = `
+                    <p class="text-muted text-center py-3" style="font-size: 0.8em;">
+                        No comments yet. Be the first to comment!
+                    </p>`;
             } else if (data.comments) {
+                // Comments are already sorted by score from the backend
                 data.comments.forEach(comment => {
-                    const commentEl = document.createElement('div');
-                    commentEl.className = 'comment text-start mb-2 px-2';
-                    
-                    // Handle timestamp properly
-                    let formattedDate = 'Just now';
-                    if (comment.timestamp) {
-                        try {
-                            // Handle Firestore timestamp format
-                            const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
-                            formattedDate = date.toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
-                        } catch (e) {
-                            console.warn('Error parsing timestamp:', e);
-                        }
-                    }
-                    
-                    commentEl.innerHTML = `
-                        <span class="fw-bold me-1 comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname)}:</span>
-                        <span class="comment-text text-dark" style="font-size: 0.8em;">${escapeHtml(comment.comment)}</span>
-                        <br><small class="text-muted" style="font-size: 0.7em;">${formattedDate}</small>
-                    `;
+                    const commentEl = createCommentElement(comment);
                     commentsList.appendChild(commentEl);
                 });
             }
@@ -999,7 +997,10 @@ function loadComments(articleId, container) {
         .catch(err => {
             console.error('Error loading comments:', err);
             const commentsList = container.querySelector('.comments-list');
-            commentsList.innerHTML = '<p class="text-muted text-center py-3" style="font-size: 0.8em;">Error loading comments.</p>';
+            commentsList.innerHTML = `
+                <p class="text-muted text-center py-3" style="font-size: 0.8em;">
+                    Error loading comments.
+                </p>`;
         });
 }
 
@@ -1008,6 +1009,248 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// UPDATED: Create comment element with voting buttons
+function createCommentElement(comment) {
+    const commentEl = document.createElement('div');
+    commentEl.className = 'comment text-start mb-2 px-2';
+    commentEl.dataset.commentId = comment.id;
+    
+    // Calculate score and determine class
+    const upvotes = comment.upvotes || 0;
+    const downvotes = comment.downvotes || 0;
+    const score = upvotes - downvotes;
+    const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : '';
+    
+    // Handle timestamp
+    let formattedDate = 'Just now';
+    if (comment.timestamp) {
+        try {
+            const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
+            formattedDate = date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            console.warn('Error parsing timestamp:', e);
+        }
+    }
+    
+    commentEl.innerHTML = `
+        <div class="comment-header d-flex justify-content-between align-items-start mb-1">
+            <div class="comment-meta d-flex align-items-center gap-2">
+                <span class="fw-bold comment-nickname" style="font-size: 0.8em;">${escapeHtml(comment.nickname || 'Anonymous')}</span>
+                <small class="text-muted comment-timestamp" style="font-size: 0.7em;">${formattedDate}</small>
+            </div>
+            <div class="comment-score ${scoreClass}" style="font-size: 0.75em; font-weight: 600; min-width: 20px; text-align: center;">${score}</div>
+        </div>
+        
+        <div class="comment-content mb-2">
+            <div class="comment-text text-dark" style="font-size: 0.8em; line-height: 1.4;">${escapeHtml(comment.comment)}</div>
+        </div>
+        
+        <div class="comment-actions d-flex align-items-center gap-1">
+            <button class="vote-btn upvote ${comment.userVote === 'up' ? 'active' : ''}" 
+                    data-vote="up" title="Upvote">
+                ▲
+            </button>
+            <button class="vote-btn downvote ${comment.userVote === 'down' ? 'active' : ''}" 
+                    data-vote="down" title="Downvote">
+                ▼
+            </button>
+        </div>
+    `;
+    
+    // Add event listeners for voting
+    const upvoteBtn = commentEl.querySelector('.vote-btn.upvote');
+    const downvoteBtn = commentEl.querySelector('.vote-btn.downvote');
+    
+    upvoteBtn.addEventListener('click', () => handleVote(commentEl, 'up'));
+    downvoteBtn.addEventListener('click', () => handleVote(commentEl, 'down'));
+    
+    return commentEl;
+}
+
+// NEW: Handle voting on comments
+async function handleVote(commentElement, voteType) {
+    const commentId = commentElement.dataset.commentId;
+    const articleId = commentElement.closest('.article-comments').dataset.articleId;
+    const voteBtn = commentElement.querySelector(`.vote-btn.${voteType === 'up' ? 'upvote' : 'downvote'}`);
+    const otherBtn = commentElement.querySelector(`.vote-btn.${voteType === 'up' ? 'downvote' : 'upvote'}`);
+    
+    // Prevent double-clicking
+    if (voteBtn.disabled) return;
+    
+    // Show loading state
+    voteBtn.disabled = true;
+    otherBtn.disabled = true;
+    voteBtn.style.opacity = '0.6';
+    
+    try {
+        const response = await fetch('/api/comment-vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                comment_id: commentId,
+                article_id: articleId,
+                vote_type: voteType
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Update UI with new vote state
+        updateVoteUI(commentElement, result);
+        
+        // Re-sort comments after a short delay
+        setTimeout(() => {
+            const container = commentElement.closest('.article-comments');
+            if (container) {
+                loadComments(articleId, container);
+            }
+        }, 500);
+        
+    } catch (error) {
+        console.error('Vote error:', error);
+        // Show error feedback
+        voteBtn.style.background = 'rgba(255, 0, 0, 0.1)';
+        setTimeout(() => {
+            voteBtn.style.background = '';
+        }, 1000);
+        
+    } finally {
+        // Remove loading state
+        voteBtn.disabled = false;
+        otherBtn.disabled = false;
+        voteBtn.style.opacity = '';
+    }
+}
+
+// NEW: Update vote UI after successful vote
+function updateVoteUI(commentElement, voteResult) {
+    const upvoteBtn = commentElement.querySelector('.vote-btn.upvote');
+    const downvoteBtn = commentElement.querySelector('.vote-btn.downvote');
+    const scoreEl = commentElement.querySelector('.comment-score');
+    
+    // Remove active state from both buttons
+    upvoteBtn.classList.remove('active');
+    downvoteBtn.classList.remove('active');
+    
+    // Set active state based on user's current vote
+    if (voteResult.user_vote === 'up') {
+        upvoteBtn.classList.add('active');
+    } else if (voteResult.user_vote === 'down') {
+        downvoteBtn.classList.add('active');
+    }
+    
+    // Update score display
+    const newScore = voteResult.score || 0;
+    scoreEl.textContent = newScore;
+    
+    // Update score styling
+    scoreEl.className = 'comment-score';
+    if (newScore > 0) {
+        scoreEl.classList.add('positive');
+    } else if (newScore < 0) {
+        scoreEl.classList.add('negative');
+    }
+}
+
+// NEW: Inject voting styles
+function injectVotingStyles() {
+    if (document.getElementById('voting-styles')) return; // Don't inject twice
+    
+    const style = document.createElement('style');
+    style.id = 'voting-styles';
+    style.textContent = `
+        /* Comment voting styles */
+        .comment {
+            border-left: 2px solid var(--border-color);
+            margin: 8px 0;
+            padding: 8px 12px;
+            background: var(--card-bg);
+            transition: all 0.2s ease;
+            border-radius: 3px;
+        }
+
+        .comment:hover {
+            border-left-color: var(--text-color);
+            background: var(--editable-area-bg);
+        }
+
+        .vote-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+            color: var(--source-date-color);
+            font-size: 14px;
+            min-width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vote-btn:hover {
+            background: var(--editable-area-bg);
+        }
+
+        .vote-btn.upvote:hover {
+            background: rgba(255, 69, 0, 0.1) !important;
+            color: #ff4500 !important;
+        }
+
+        .vote-btn.downvote:hover {
+            background: rgba(124, 77, 255, 0.1) !important;
+            color: #7c4dff !important;
+        }
+
+        .vote-btn.active.upvote {
+            color: #ff4500 !important;
+            background: rgba(255, 69, 0, 0.1) !important;
+        }
+
+        .vote-btn.active.downvote {
+            color: #7c4dff !important;
+            background: rgba(124, 77, 255, 0.1) !important;
+        }
+
+        .vote-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .comment-score.positive {
+            color: #ff4500;
+        }
+
+        .comment-score.negative {
+            color: #7c4dff;
+        }
+
+        .comments-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+        }
+
+        .sort-indicator {
+            font-size: 0.75em;
+            color: var(--source-date-color);
+            font-style: italic;
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 // Setup comment form submit - IMPROVED VERSION (without success message)
@@ -1499,12 +1742,4 @@ function clearFeedbackStatus() {
     if (existingStatus) {
         existingStatus.remove();
     }
-}
-
-// ===== UTILITY FUNCTIONS =====
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
