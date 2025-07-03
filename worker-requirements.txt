@@ -7,8 +7,7 @@ python-dotenv
 
 # TTS generation (for generate_tts_task)
 edge-tts
-pydub
-pyaudioop  # Required for pydub in Python 3.13+
+pydub[scipy]  # Use scipy backend for Python 3.13+ compatibility
 
 # News fetching (for fetch_article_content_task & cache_news_task)
 requests
