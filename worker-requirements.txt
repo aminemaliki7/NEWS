@@ -1,19 +1,17 @@
-# Core Dramatiq dependencies
-dramatiq[redis]==1.18.0
-redis==4.5.4
 
-# Environment config
+google-generativeai
+google-cloud-firestore
+google-cloud-core
+google-auth
+requests
 python-dotenv
 
-# TTS generation (for generate_tts_task)
 edge-tts
-pydub[scipy]  # Use scipy backend for Python 3.13+ compatibility
-
-# News fetching (for fetch_article_content_task & cache_news_task)
-requests
+pydub
+feedparser
 beautifulsoup4
 html5lib
-feedparser
 
-# Text processing
 nltk
+redis==4.5.4
+dramatiq[redis]==1.18.0
