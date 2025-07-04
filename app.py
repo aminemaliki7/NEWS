@@ -70,7 +70,7 @@ gnews_client = GNewsClient()
 
 @app.after_request
 def add_security_headers(response):
-    """Enhanced security headers for production"""
+    """Enhanced security headers - FINAL VERSION"""
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
@@ -81,30 +81,37 @@ def add_security_headers(response):
     # Remove potential information disclosure headers
     response.headers.pop('X-Powered-By', None)
     
-    # Environment-based CSP
+    # CLEANED UP CSP - no more conflicts
     is_production = os.getenv('FLASK_ENV') == 'production'
     
     if is_production:
-        # Strict production CSP
+        # Production CSP - more restrictive
         csp_policy = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-            "https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net "
-            "https://www.googletagmanager.com https://partner.googleadservices.com "
-            "https://tpc.googlesyndication.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "script-src 'self' 'unsafe-inline' "
+            "https://cdn.jsdelivr.net "
+            "https://pagead2.googlesyndication.com "
+            "https://googleads.g.doubleclick.net "
+            "https://www.googletagmanager.com "
+            "https://www.google.com "
+            "https://partner.googleadservices.com; "
+            "style-src 'self' 'unsafe-inline' "
+            "https://cdn.jsdelivr.net "
+            "https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: blob: https:; "
             "media-src 'self' blob: data:; "
-            "connect-src 'self' https://pagead2.googlesyndication.com "
-            "https://www.google-analytics.com https://googleads.g.doubleclick.net; "
-            "frame-src 'self' https://googleads.g.doubleclick.net "
-            "https://tpc.googlesyndication.com; "
+            "connect-src 'self' "
+            "https://pagead2.googlesyndication.com "
+            "https://www.google-analytics.com; "
+            "frame-src 'self' "
+            "https://www.google.com "
+            "https://googleads.g.doubleclick.net; "
             "object-src 'none'; "
             "base-uri 'self'"
         )
     else:
-        # Development-friendly CSP
+        # Development CSP - more permissive
         csp_policy = (
             "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
@@ -119,7 +126,6 @@ def add_security_headers(response):
     
     response.headers['Content-Security-Policy'] = csp_policy
     return response
-
 # ============================================
 # INPUT VALIDATION & SANITIZATION
 # ============================================
