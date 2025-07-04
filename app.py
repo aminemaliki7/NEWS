@@ -7,7 +7,7 @@ import threading
 import uuid
 from flask import Flask, Response, request, render_template, redirect, url_for, send_file, jsonify, session
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import google.generativeai as genai
 from tasks import cache_news_task, generate_tts_task
 from tts import generate_simple_tts
@@ -24,6 +24,8 @@ from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
 from flask import request, session
 import hashlib
+from functools import wraps
+from typing import Dict, Optional
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -46,7 +48,6 @@ broker = redis_broker
 gnews_client = GNewsClient() 
 COMMENTS = {}
 
-
 load_dotenv()
 
 firebase_config = {
@@ -60,12 +61,171 @@ firebase_config = {
     "databaseURL": ""  # Not needed now unless you use Realtime DB
 }
 
+# ============================================
+# RATE LIMITING IMPLEMENTATION
+# ============================================
 
+class RateLimiter:
+    """Redis-based rate limiter for API endpoints"""
+    
+    def __init__(self, redis_client):
+        self.redis = redis_client
+    
+    def is_allowed(self, key: str, limit: int, window: int) -> tuple[bool, dict]:
+        """
+        Check if request is allowed based on rate limits
+        
+        Args:
+            key: Unique identifier for the client (IP, user_id, etc.)
+            limit: Maximum number of requests allowed
+            window: Time window in seconds
+            
+        Returns:
+            tuple: (is_allowed, rate_limit_info)
+        """
+        current_time = int(time.time())
+        pipeline = self.redis.pipeline()
+        
+        # Use sliding window log approach
+        pipeline.zremrangebyscore(key, 0, current_time - window)
+        pipeline.zcard(key)
+        pipeline.zadd(key, {str(uuid.uuid4()): current_time})
+        pipeline.expire(key, window)
+        
+        results = pipeline.execute()
+        current_requests = results[1]
+        
+        # Rate limit info for headers
+        rate_limit_info = {
+            'limit': limit,
+            'remaining': max(0, limit - current_requests),
+            'reset': current_time + window,
+            'retry_after': window if current_requests >= limit else None
+        }
+        
+        return current_requests < limit, rate_limit_info
 
+# Initialize rate limiter
+rate_limiter = RateLimiter(redis_client)
 
-# Add this route to your Flask app (around line 70, after the comments routes)
+# Rate limiting configurations
+RATE_LIMITS = {
+    'api_general': {'limit': 100, 'window': 3600},      # 100 requests per hour for general API
+    'api_tts': {'limit': 20, 'window': 3600},           # 20 TTS requests per hour
+    'api_news': {'limit': 200, 'window': 3600},         # 200 news requests per hour
+    'api_comments': {'limit': 50, 'window': 3600},      # 50 comment actions per hour
+    'api_feedback': {'limit': 10, 'window': 3600},      # 10 feedback submissions per hour
+    'api_upload': {'limit': 10, 'window': 3600},        # 10 file uploads per hour
+    'api_translate': {'limit': 30, 'window': 3600},     # 30 translations per hour
+}
 
+def get_client_id() -> str:
+    """Get unique client identifier for rate limiting"""
+    # Try to get real IP address behind proxy
+    real_ip = request.environ.get('HTTP_X_FORWARDED_FOR')
+    if real_ip:
+        real_ip = real_ip.split(',')[0].strip()
+    else:
+        real_ip = request.environ.get('REMOTE_ADDR', 'unknown')
+    
+    # Include user agent for better uniqueness while maintaining anonymity
+    user_agent_hash = hashlib.md5(
+        request.headers.get('User-Agent', '').encode()
+    ).hexdigest()[:8]
+    
+    return f"{real_ip}:{user_agent_hash}"
+
+def rate_limit(category: str = 'api_general'):
+    """
+    Rate limiting decorator
+    
+    Args:
+        category: Rate limit category from RATE_LIMITS config
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if category not in RATE_LIMITS:
+                app.logger.warning(f"Unknown rate limit category: {category}")
+                return f(*args, **kwargs)
+            
+            config = RATE_LIMITS[category]
+            client_id = get_client_id()
+            rate_key = f"rate_limit:{category}:{client_id}"
+            
+            is_allowed, rate_info = rate_limiter.is_allowed(
+                rate_key, config['limit'], config['window']
+            )
+            
+            # Add rate limit headers to response
+            def add_rate_limit_headers(response):
+                if hasattr(response, 'headers'):
+                    response.headers['X-RateLimit-Limit'] = str(rate_info['limit'])
+                    response.headers['X-RateLimit-Remaining'] = str(rate_info['remaining'])
+                    response.headers['X-RateLimit-Reset'] = str(rate_info['reset'])
+                    if rate_info['retry_after']:
+                        response.headers['Retry-After'] = str(rate_info['retry_after'])
+                return response
+            
+            if not is_allowed:
+                app.logger.warning(
+                    f"Rate limit exceeded for {client_id} on {category}. "
+                    f"Limit: {config['limit']}/{config['window']}s"
+                )
+                
+                error_response = jsonify({
+                    'error': 'Rate limit exceeded',
+                    'message': f'Maximum {config["limit"]} requests per {config["window"]} seconds allowed',
+                    'retry_after': rate_info['retry_after']
+                })
+                error_response.status_code = 429
+                return add_rate_limit_headers(error_response)
+            
+            # Execute the original function
+            response = f(*args, **kwargs)
+            
+            # Add headers to successful responses
+            if hasattr(response, 'headers') or isinstance(response, tuple):
+                return add_rate_limit_headers(response)
+            else:
+                # For responses that don't support headers directly
+                return response
+                
+        return decorated_function
+    return decorator
+
+# Rate limiting bypass for admin/internal requests
+def is_admin_request() -> bool:
+    """Check if request should bypass rate limiting"""
+    # Add your admin IP addresses or API keys here
+    admin_ips = os.getenv('ADMIN_IPS', '').split(',')
+    admin_api_key = request.headers.get('X-Admin-API-Key')
+    client_ip = get_client_id().split(':')[0]
+    
+    return (
+        client_ip in admin_ips or 
+        admin_api_key == os.getenv('ADMIN_API_KEY') or
+        request.headers.get('User-Agent', '').startswith('Health-Check')
+    )
+
+def conditional_rate_limit(category: str = 'api_general'):
+    """Rate limiting decorator that bypasses for admin requests"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if is_admin_request():
+                return f(*args, **kwargs)
+            return rate_limit(category)(f)(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# ============================================
+# END RATE LIMITING IMPLEMENTATION
+# ============================================
+
+# Apply rate limiting to API endpoints
 @app.route('/api/feedback', methods=['POST'])
+@rate_limit('api_feedback')
 def submit_feedback():
     """API endpoint to submit user feedback"""
     try:
@@ -113,7 +273,6 @@ def submit_feedback():
         app.logger.error(f"Error submitting feedback: {str(e)}")
         return jsonify({"error": "Failed to submit feedback. Please try again."}), 500
 
-
 # Optional: Add an admin route to view feedback (add this if you want to see feedback in browser)
 @app.route('/admin/feedback')
 def view_feedback():
@@ -135,7 +294,9 @@ def view_feedback():
     except Exception as e:
         app.logger.error(f"Error retrieving feedback: {str(e)}")
         return jsonify({"error": "Failed to retrieve feedback"}), 500
+
 @app.route('/api/comment-like', methods=['POST'])
+@rate_limit('api_comments')
 def handle_comment_like():
     """Handle heart like/unlike for comments"""
     try:
@@ -211,8 +372,10 @@ def handle_comment_like():
     except Exception as e:
         app.logger.error(f"Error handling comment like: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
 # API — Article Comment
 @app.route('/api/article-comment', methods=['POST'])
+@rate_limit('api_comments')
 def post_comment():
     data = request.json
     article_id = data.get('article_id')
@@ -254,6 +417,7 @@ def post_comment():
         return jsonify({"message": "Comment posted", "nickname": nickname})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 def get_user_id():
     """Generate a consistent user ID based on IP address for voting"""
     user_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
@@ -261,8 +425,10 @@ def get_user_id():
     user_agent = request.headers.get('User-Agent', '')
     user_string = f"{user_ip}:{user_agent}"
     return hashlib.sha256(user_string.encode()).hexdigest()[:16]
+
 # API — Article Comment
 @app.route('/api/article-comments', methods=['GET'])
+@rate_limit('api_general')
 def get_comments():
     article_id = request.args.get('article_id')
     if not article_id:
@@ -358,6 +524,7 @@ def migrate_to_heart_likes():
 
 # Add a migration function to update existing comments (run this once)
 @app.route('/api/article-like', methods=['POST'])
+@rate_limit('api_comments')
 def handle_article_like():
     """Handle heart like/unlike for articles (Instagram style)"""
     try:
@@ -436,6 +603,7 @@ def handle_article_like():
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/article-likes', methods=['GET'])
+@rate_limit('api_general')
 def get_article_likes():
     """Get like count and user like status for an article"""
     try:
@@ -466,13 +634,14 @@ def get_article_likes():
     except Exception as e:
         app.logger.error(f"Error getting article likes: {str(e)}")
         return jsonify({'error': 'Failed to get article likes'}), 500
+
 @app.route('/privacy-policy')
 def privacy_policy():
     return render_template('privacy-policy.html')
+
 @app.route('/terms-of-service')
 def terms():
     return render_template('terms.html')
-
 
 # 404 / 500 handlers
 @app.errorhandler(404)
@@ -483,11 +652,12 @@ def not_found(e):
 def server_error(e):
     return render_template('error.html', message="Internal server error."), 500
 
-
 def setup_gemini_api(api_key):
     genai.configure(api_key=api_key)
+
 # Add this to your app initialization
 app.config['GEMINI_API_KEY'] = os.getenv("GEMINI_API_KEY")
+
 # Configure upload folder
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
@@ -545,6 +715,7 @@ AVAILABLE_VOICES = [
 
 # Define languages from available voices
 AVAILABLE_LANGUAGES = sorted(list(set([voice["language"] for voice in AVAILABLE_VOICES])))
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -590,9 +761,9 @@ def index():
         prefill=prefill
     )
 
-
 # Update the upload route to store the title
 @app.route('/upload', methods=['POST'])
+@rate_limit('api_upload')
 def upload_file():
     # Get the input method (text or file)
     input_method = request.form.get('input-method', 'text')
@@ -692,8 +863,6 @@ def upload_file():
     
     return redirect(url_for('job_status', job_id=job_id))
 
-
-
 @app.route('/status/<job_id>')
 def job_status(job_id):
     if job_id not in jobs:
@@ -704,6 +873,7 @@ def job_status(job_id):
     return render_template('status.html', job_id=job_id, job=job, voices=AVAILABLE_VOICES)
 
 @app.route('/api/status/<job_id>')
+@rate_limit('api_general')
 def api_job_status(job_id):
     if job_id not in jobs:
         return jsonify({'error': 'Job not found'}), 404
@@ -753,6 +923,7 @@ def stream_audio(job_id):
         as_attachment=False,
         conditional=True
     )
+
 @app.route('/dashboard')
 def dashboard():
     user_jobs = session.get('jobs', [])
@@ -780,7 +951,6 @@ def _jinja2_filter_datetime(timestamp):
     dt = datetime.fromtimestamp(timestamp)
     return dt.strftime('%Y-%m-%d %H:%M')
 
-
 @app.route('/about')
 def about_page():
     return render_template('about.html')
@@ -804,16 +974,17 @@ def convert_to_voice(download_id):
     # Redirect to the main voice generator page with a parameter
     # to indicate we want to use this audio file
     return redirect(url_for('index', audio_source=download_id))
+
 @app.route('/robots.txt')
 def robots():
     content = """User-agent: *
 Disallow:
 Sitemap: https://newsnap.space/sitemap.xml"""
     return Response(content, mimetype='text/plain')
+
 @app.route('/sitemap.xml')
 def sitemap():
     return send_file('sitemap.xml', mimetype='application/xml')
-
 
 @app.route('/news')
 def news_page():
@@ -832,8 +1003,8 @@ def news_page():
     # Render the template (even if articles = [])
     return render_template('news.html', languages=languages, voices=voices, articles=articles)
 
-
 @app.route('/api/news')
+@rate_limit('api_news')
 def get_news():
     """API endpoint to fetch news from GNews"""
     category = request.args.get('category', 'general')
@@ -856,8 +1027,8 @@ def get_news():
             "articles": []
         }), 500
 
-
 @app.route('/api/news/content')
+@rate_limit('api_news')
 def get_article_content():
     """API endpoint to fetch and extract content from a news article"""
     # Get the article URL
@@ -886,6 +1057,7 @@ def get_article_content():
         }), 200  # Return 200 to handle the error on the client side
 
 @app.route('/api/newsletter-subscribe', methods=['POST'])
+@rate_limit('api_general')
 def newsletter_subscribe():
     data = request.get_json()
     email = data.get('email', '').strip().lower()
@@ -905,8 +1077,8 @@ def newsletter_subscribe():
         print(f'Error saving newsletter subscription: {e}')
         return jsonify({'error': 'Failed to save subscription.'}), 500
 
-
 @app.route('/api/news/voice-optimize', methods=['POST'])
+@rate_limit('api_general')
 def optimize_article_for_voice():
     data = request.json
 
@@ -958,8 +1130,8 @@ def stream_temp_audio(path):
         app.logger.error(f"Error serving audio file {audio_path}: {e}")
         return jsonify({"error": "Error serving audio file"}), 500
 
-
 @app.route('/api/news/summary-audio', methods=['POST'])
+@rate_limit('api_tts')
 def summary_audio():
     data = request.json
     # Change from 'content' to 'description' 
@@ -997,7 +1169,7 @@ def summary_audio():
         app.logger.error(f"TTS error: {e}")
         return jsonify({"error": str(e)}), 500
 
-# Optional: Add a cleanup function to remove old temp filesssssssssssssssssssssss
+# Optional: Add a cleanup function to remove old temp files
 def cleanup_old_files():
     """Clean up old temporary files (older than 1 hour)"""
     import time
@@ -1016,8 +1188,8 @@ def cleanup_old_files():
         except Exception as e:
             app.logger.error(f"Error during cleanup: {e}")
 
-
 @app.route('/api/news/translate', methods=['POST'])
+@rate_limit('api_translate')
 def translate_text():
     """API endpoint to translate text using Gemini."""
     data = request.json
@@ -1052,6 +1224,7 @@ def translate_text():
         return jsonify({"error": f"Failed to translate text: {str(e)}"}), 500
     
 @app.route('/api/news/test-keys')
+@conditional_rate_limit('api_general')
 def test_gnews_keys():
     current_key_index = gnews_client.api_index + 1  # Human-readable (1-5)
     total_keys = len(gnews_client.api_keys)
@@ -1061,8 +1234,10 @@ def test_gnews_keys():
         "total_api_keys": total_keys,
         "status": "OK"
     })
+
 # Async TTS endpoint
 @app.route('/api/news/summary-audio-async', methods=['POST'])
+@rate_limit('api_tts')
 def summary_audio_async():
     data = request.json
     text = data.get("description", "") or data.get("content", "")
@@ -1085,7 +1260,9 @@ def summary_audio_async():
         "status": "processing",
         "message": "Audio generation started"
     })
+
 @app.route('/api/news-cached')
+@rate_limit('api_news')
 def get_news_cached():
     category = request.args.get('category', 'general')
     language = request.args.get('language', 'en')
@@ -1104,8 +1281,10 @@ def get_news_cached():
         return jsonify(results)
     except Exception:
         return jsonify({"error": "Failed to fetch news", "articles": []}), 500
+
 # Task status endpoint
 @app.route('/api/task-status/<task_id>')
+@rate_limit('api_general')
 def get_task_status(task_id):
     try:
         # Check if result is cached
@@ -1135,8 +1314,83 @@ def get_task_status(task_id):
             'message': 'Task failed'
         })
 
+# ============================================
+# RATE LIMITING ADMIN/MONITORING ENDPOINTS
+# ============================================
+
+@app.route('/api/rate-limit/status')
+@conditional_rate_limit('api_general')
+def rate_limit_status():
+    """Get current rate limit status for the client"""
+    client_id = get_client_id()
+    status = {}
+    
+    for category, config in RATE_LIMITS.items():
+        rate_key = f"rate_limit:{category}:{client_id}"
+        current_time = int(time.time())
+        
+        # Get current request count
+        redis_client.zremrangebyscore(rate_key, 0, current_time - config['window'])
+        current_requests = redis_client.zcard(rate_key)
+        
+        status[category] = {
+            'limit': config['limit'],
+            'window': config['window'],
+            'current_requests': current_requests,
+            'remaining': max(0, config['limit'] - current_requests),
+            'reset_time': current_time + config['window']
+        }
+    
+    return jsonify({
+        'client_id': client_id[:8] + '...',  # Partial ID for privacy
+        'rate_limits': status
+    })
+
+@app.route('/api/rate-limit/reset', methods=['POST'])
+def reset_rate_limit():
+    """Reset rate limits for a client (admin only)"""
+    admin_key = request.headers.get('X-Admin-API-Key')
+    if admin_key != os.getenv('ADMIN_API_KEY'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.get_json()
+    client_id = data.get('client_id')
+    category = data.get('category', 'all')
+    
+    if not client_id:
+        return jsonify({'error': 'client_id required'}), 400
+    
+    try:
+        if category == 'all':
+            # Reset all categories for the client
+            for cat in RATE_LIMITS.keys():
+                rate_key = f"rate_limit:{cat}:{client_id}"
+                redis_client.delete(rate_key)
+        else:
+            # Reset specific category
+            if category not in RATE_LIMITS:
+                return jsonify({'error': 'Invalid category'}), 400
+            rate_key = f"rate_limit:{category}:{client_id}"
+            redis_client.delete(rate_key)
+        
+        return jsonify({'message': 'Rate limits reset successfully'})
+    
+    except Exception as e:
+        app.logger.error(f"Error resetting rate limits: {e}")
+        return jsonify({'error': 'Failed to reset rate limits'}), 500
+
+# Health check endpoint (bypasses rate limiting)
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '1.0.0'
+    })
 
 # Call cleanup periodically (you can set this up with a scheduler)
 # cleanup_old_files()
+
 if __name__ == '__main__':
     app.run(debug=True)
