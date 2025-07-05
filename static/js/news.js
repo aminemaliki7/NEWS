@@ -12,6 +12,13 @@ let activeAudio = null;
 let currentPlayButton = null;
 let currentArticleIndex = null;
 let audioCache = new Map(); // Cache for faster audio loading
+// ===== ADD THESE NEW VARIABLES AT THE TOP =====
+// Newsletter/Subscriber state
+let subscriberInfo = null;
+
+// ===== ADD TO DOMContentLoaded EVENT =====
+// Add this line to your existing DOMContentLoaded function:
+loadSubscriberStatus();
 
 // DOM elements
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -58,6 +65,69 @@ const translations = {
         error: "An error occurred. Please try again later."
     }
 };
+
+async function loadSubscriberStatus() {
+    try {
+        const response = await fetch('/api/subscriber-status');
+        const data = await response.json();
+        
+        if (data.subscribed) {
+            subscriberInfo = data;
+            console.log('User is subscribed:', data.name);
+        } else {
+            subscriberInfo = null;
+            console.log('User is not subscribed');
+        }
+        
+        // Update theme controls to show subscriber status
+        updateThemeControlsWithSubscriber();
+        
+    } catch (error) {
+        console.error('Error loading subscriber status:', error);
+    }
+}
+
+function updateThemeControlsWithSubscriber() {
+    const newsletterBtn = document.getElementById('newsletterBtn');
+    if (!newsletterBtn) return;
+    
+    if (subscriberInfo) {
+        // Simple: Just show the user's name, no stats
+        newsletterBtn.innerHTML = `<i class="fas fa-user"></i> ${subscriberInfo.name}`;
+        newsletterBtn.className = 'btn btn-outline-secondary btn-sm'; // Keep it black and white
+        newsletterBtn.title = 'Click to unsubscribe';
+        
+        // Add hover effect for unsubscribe option
+        newsletterBtn.onmouseenter = function() {
+            this.innerHTML = `<i class="fas fa-times"></i> Unsubscribe`;
+            this.className = 'btn btn-outline-danger btn-sm';
+        };
+        
+        newsletterBtn.onmouseleave = function() {
+            this.innerHTML = `<i class="fas fa-user"></i> ${subscriberInfo.name}`;
+            this.className = 'btn btn-outline-secondary btn-sm';
+        };
+        
+    } else {
+        // Button for non-subscribed users
+        newsletterBtn.innerHTML = '<i class="fas fa-envelope"></i> Newsletter';
+        newsletterBtn.className = 'btn btn-outline-primary btn-sm';
+        newsletterBtn.title = 'Subscribe to Newsletter';
+        
+        // Remove hover effects
+        newsletterBtn.onmouseenter = null;
+        newsletterBtn.onmouseleave = null;
+    }
+}
+// Update subscriber stats in real-time when user interacts
+function updateSubscriberStats(likeDelta = 0, commentDelta = 0) {
+    if (!subscriberInfo) return;
+    
+    subscriberInfo.total_likes = Math.max(0, subscriberInfo.total_likes + likeDelta);
+    subscriberInfo.total_comments = Math.max(0, subscriberInfo.total_comments + commentDelta);
+    
+    updateThemeControlsWithSubscriber();
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -164,8 +234,40 @@ function addThemeControl() {
 }
 
 function openNewsletterPopup() {
-    const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
-    modal.show();
+    if (subscriberInfo) {
+        // User is subscribed - show unsubscribe confirmation
+        if (confirm(`Unsubscribe from newsletter?\n\nYou are currently subscribed as: ${subscriberInfo.name}`)) {
+            unsubscribeFromNewsletter();
+        }
+    } else {
+        // User is not subscribed - show subscription modal
+        const modal = new bootstrap.Modal(document.getElementById('newsletterModal'));
+        modal.show();
+    }
+}
+async function unsubscribeFromNewsletter() {
+    try {
+        const response = await fetch('/api/newsletter-unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Successfully unsubscribed from newsletter.');
+            
+            // Reset subscriber info
+            subscriberInfo = null;
+            updateThemeControlsWithSubscriber();
+            
+        } else {
+            alert('Failed to unsubscribe: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Unsubscribe error:', error);
+        alert('Network error. Please try again.');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -174,7 +276,15 @@ document.addEventListener('DOMContentLoaded', () => {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
 
+            const name = document.getElementById('newsletterName').value.trim();
             const email = document.getElementById('newsletterEmail').value.trim();
+            
+            // Validation
+            if (!name || name.length < 2) {
+                alert('Please enter your full name (at least 2 characters).');
+                return;
+            }
+            
             if (!email || !email.includes('@')) {
                 alert('Please enter a valid email address.');
                 return;
@@ -185,10 +295,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 categories.push(checkbox.value);
             });
 
+            if (categories.length === 0) {
+                alert('Please select at least one category.');
+                return;
+            }
+
+            // Show loading state
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Subscribing...';
+
             fetch('/api/newsletter-subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    name: name,
                     email: email,
                     categories: categories
                 })
@@ -198,15 +320,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.error) {
                     alert('Subscription failed: ' + data.error);
                 } else {
-                    alert('Thank you for subscribing! 📬');
+                    alert(`Thank you ${data.subscriber_name}! You're now subscribed to our newsletter. 📬\n\nYour likes and comments will now be tracked with your name!`);
                     const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
                     modal.hide();
                     form.reset();
+                    
+                    // Reload subscriber status
+                    if (typeof loadSubscriberStatus === 'function') {
+                        loadSubscriberStatus();
+                    }
                 }
             })
             .catch(err => {
                 console.error('Subscription error:', err);
                 alert('An error occurred. Please try again later.');
+            })
+            .finally(() => {
+                // Reset button
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             });
         });
     }
@@ -990,8 +1122,16 @@ async function handleArticleLike(articleId, likeBtn, likeCountEl) {
         // Update UI with Instagram-style animation
         if (result.user_liked) {
             likeBtn.classList.add('liked');
+            // Update subscriber stats if user is subscribed
+            if (subscriberInfo) {
+                updateSubscriberStats(1, 0);
+            }
         } else {
             likeBtn.classList.remove('liked');
+            // Update subscriber stats if user is subscribed
+            if (subscriberInfo) {
+                updateSubscriberStats(-1, 0);
+            }
         }
         
         // Update like count - JUST THE NUMBER
@@ -1023,7 +1163,6 @@ async function handleArticleLike(articleId, likeBtn, likeCountEl) {
         likeBtn.classList.remove('loading');
     }
 }
-
 // Updated: Load like count with number-only display
 async function loadLikeCount(articleId, likeCountEl) {
     try {
@@ -1252,11 +1391,24 @@ async function loadLikeCount(articleId, likeCountEl) {
     }
 }
 
+// Helper function to load comments
 function loadComments(articleId, container) {
+    console.log(`Loading comments for article: ${articleId}`);
+    
     fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('Comments response:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Comments data:', data);
+            
             const commentsList = container.querySelector('.comments-list');
+            if (!commentsList) {
+                console.error('Comments list element not found');
+                return;
+            }
+            
             commentsList.innerHTML = '';
 
             if (data.comments && data.comments.length === 0) {
@@ -1275,7 +1427,7 @@ function loadComments(articleId, container) {
             console.error('Error loading comments:', err);
         });
 }
-// Updated: Create Instagram-style comment element
+// Helper function to create comment elements
 function createInstagramComment(comment) {
     const commentEl = document.createElement('div');
     commentEl.className = 'comment';
@@ -1284,7 +1436,7 @@ function createInstagramComment(comment) {
     const likes = comment.likes || 0;
     const userLiked = comment.userLiked || false;
     
-    // Handle timestamp (Instagram style - shorter)
+    // Handle timestamp
     let formattedDate = 'now';
     if (comment.timestamp) {
         try {
@@ -1306,9 +1458,12 @@ function createInstagramComment(comment) {
         }
     }
     
+    // Show special indicator for subscribers
+    const subscriberBadge = comment.is_subscriber ? ' <span class="subscriber-badge">✓</span>' : '';
+    
     commentEl.innerHTML = `
         <div class="comment-header">
-            <span class="comment-nickname">${escapeHtml(comment.nickname || 'Anonymous')}</span>
+            <span class="comment-nickname">${escapeHtml(comment.nickname || 'Anonymous')}${subscriberBadge}</span>
             <span class="comment-timestamp">${formattedDate}</span>
         </div>
         
@@ -1332,6 +1487,7 @@ function createInstagramComment(comment) {
     return commentEl;
 }
 // FIXED: Update handleCommentLike to use correct selector
+// Helper function to handle comment likes
 async function handleCommentLike(commentElement) {
     const commentId = commentElement.dataset.commentId;
     const articleId = commentElement.closest('.article-interactions').dataset.articleId;
@@ -1526,24 +1682,117 @@ async function handleLike(commentElement) {
 }
 // Updated: Inject Instagram-style CSS
 function injectVotingStyles() {
-    // This function name stays the same but now injects Instagram styles
     if (document.getElementById('instagram-styles')) return;
     
-    // The CSS is now in the separate CSS file
-    // This function is kept for compatibility but doesn't inject styles
-    console.log('Instagram-style CSS should be loaded from external file');
+    const style = document.createElement('style');
+    style.id = 'instagram-styles';
+    style.textContent = `
+        /* Subscriber badge styling */
+        .subscriber-badge {
+            color: #1da1f2;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+        
+        /* Enhanced comment styling for subscribers */
+        .comment:has(.subscriber-badge) {
+            border-left: 2px solid #1da1f2;
+            padding-left: 8px;
+        }
+        
+        /* Additional Instagram-style enhancements */
+        .article-interactions {
+            border-top: 1px solid #efefef;
+            padding-top: 0.5rem;
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+        
+        .comment-nickname {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .comment-timestamp {
+            color: #8e8e8e;
+            font-size: 0.8rem;
+        }
+        
+        .comment-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-bottom: 0.5rem;
+        }
+        
+        .comment-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .comment-like-btn {
+            background: none;
+            border: none;
+            color: #8e8e8e;
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 0;
+            font-weight: 600;
+        }
+        
+        .comment-like-btn:hover {
+            color: #262626;
+        }
+        
+        .comment-like-btn.liked {
+            color: #ed4956;
+        }
+        
+        .comment-like-count {
+            color: #8e8e8e;
+            font-size: 0.8rem;
+        }
+    `;
+    
+    document.head.appendChild(style);
 }
 
-// FIXED: Updated setupCommentForms to use correct selectors
 function setupCommentForms() {
-    document.querySelectorAll('.article-interactions').forEach(container => {
+    console.log('Setting up comment forms...');
+    
+    document.querySelectorAll('.article-interactions').forEach((container, containerIndex) => {
         const articleId = container.dataset.articleId;
+        
+        console.log(`Container ${containerIndex}:`, {
+            hasDataset: !!container.dataset,
+            articleId: articleId
+        });
+        
+        if (!articleId) {
+            console.error(`No articleId found on container ${containerIndex}:`, container);
+            return;
+        }
+        
         const likeBtn = container.querySelector('.like-btn');
         const commentBtn = container.querySelector('.comment-btn');
         const shareBtn = container.querySelector('.share-btn');
         const commentsContainer = container.querySelector('.comments-container');
         const form = container.querySelector('.comment-form');
         const likeCountEl = container.querySelector('.like-count');
+
+        console.log(`Elements found for ${articleId}:`, {
+            likeBtn: !!likeBtn,
+            commentBtn: !!commentBtn,
+            shareBtn: !!shareBtn,
+            commentsContainer: !!commentsContainer,
+            form: !!form,
+            likeCountEl: !!likeCountEl
+        });
 
         // Load initial like count
         if (likeCountEl) {
@@ -1553,6 +1802,7 @@ function setupCommentForms() {
         // Setup like button
         if (likeBtn) {
             likeBtn.addEventListener('click', function() {
+                console.log('Like button clicked for:', articleId);
                 handleArticleLike(articleId, likeBtn, likeCountEl);
             });
         }
@@ -1560,14 +1810,13 @@ function setupCommentForms() {
         // Setup comment toggle button
         if (commentBtn && commentsContainer) {
             commentBtn.addEventListener('click', function() {
+                console.log('Comment button clicked for:', articleId);
                 const isVisible = commentsContainer.style.display !== 'none';
                 
                 if (isVisible) {
-                    // Hide comments
                     commentsContainer.style.display = 'none';
                     commentBtn.classList.remove('active');
                 } else {
-                    // Show comments and load them
                     commentsContainer.style.display = 'block';
                     commentBtn.classList.add('active');
                     loadComments(articleId, container);
@@ -1578,61 +1827,444 @@ function setupCommentForms() {
         // Setup share button
         if (shareBtn) {
             shareBtn.addEventListener('click', function() {
+                console.log('Share button clicked for:', articleId);
                 handleArticleShare(articleId, shareBtn);
             });
         }
 
-        // Setup form submission
+        // Setup form submission with subscriber integration
         if (form) {
+            console.log(`Setting up form for article: ${articleId}`);
+            
+            // Clone the form to remove any existing event listeners
             const newForm = form.cloneNode(true);
             form.parentNode.replaceChild(newForm, form);
             
-            newForm.addEventListener('submit', e => {
+            // Get form elements
+            const nicknameInput = newForm.querySelector('input[name="nickname"]');
+            const commentInput = newForm.querySelector('input[name="comment"]');
+            const submitBtn = newForm.querySelector('button[type="submit"]');
+            
+            console.log(`Form elements for ${articleId}:`, {
+                nicknameInput: !!nicknameInput,
+                commentInput: !!commentInput,
+                submitBtn: !!submitBtn,
+                subscriberInfo: !!subscriberInfo
+            });
+            
+            if (!commentInput || !submitBtn) {
+                console.error(`Essential form elements not found for ${articleId}`);
+                return;
+            }
+            
+            // Handle subscriber status for nickname input
+            if (subscriberInfo && nicknameInput) {
+                // User is subscribed - hide nickname input
+                nicknameInput.style.display = 'none';
+                nicknameInput.required = false;
+                console.log('Nickname input hidden for subscriber:', subscriberInfo.name);
+                
+                // Add subscriber indicator
+                let subscriberIndicator = newForm.querySelector('.subscriber-indicator');
+                if (!subscriberIndicator) {
+                    subscriberIndicator = document.createElement('small');
+                    subscriberIndicator.className = 'subscriber-indicator text-muted';
+                    subscriberIndicator.style.cssText = `
+                        font-size: 0.75em;
+                        margin-bottom: 0.5rem;
+                        display: block;
+                        color: #28a745;
+                        font-weight: 500;
+                    `;
+                    
+                    // Insert before the comment input's parent (the flex container)
+                    const commentContainer = commentInput.closest('.d-flex') || commentInput.parentElement;
+                    newForm.insertBefore(subscriberIndicator, commentContainer);
+                }
+                subscriberIndicator.innerHTML = `<i class="fas fa-user-check"></i> Posting as: <strong>${subscriberInfo.name}</strong>`;
+                
+            } else if (nicknameInput) {
+                // User is not subscribed - show nickname input
+                nicknameInput.style.display = 'block';
+                nicknameInput.required = false; // Keep optional
+                console.log('Nickname input visible for anonymous user');
+                
+                // Remove subscriber indicator if it exists
+                const subscriberIndicator = newForm.querySelector('.subscriber-indicator');
+                if (subscriberIndicator) {
+                    subscriberIndicator.remove();
+                }
+            }
+            
+            // Add form submission event listener
+            newForm.addEventListener('submit', function(e) {
                 e.preventDefault();
+                
+                console.log(`=== COMMENT FORM SUBMISSION START ===`);
+                console.log(`Article ID: ${articleId}`);
+                console.log(`Subscriber: ${subscriberInfo ? subscriberInfo.name : 'Anonymous'}`);
+                
+                // Get form values
+                const nickname = nicknameInput ? nicknameInput.value.trim() : '';
+                const commentText = commentInput.value.trim();
+                
+                console.log('Form values:', {
+                    nickname: nickname,
+                    commentText: commentText,
+                    commentTextLength: commentText.length,
+                    subscriberInfo: !!subscriberInfo
+                });
 
-                const nickname = newForm.nickname.value.trim();
-                const commentText = newForm.comment.value.trim();
-                const submitBtn = newForm.querySelector('button[type="submit"]');
-
+                // Client-side validation
                 if (!commentText) {
+                    console.log('Validation failed: Empty comment text');
+                    alert('Please enter a comment');
                     return;
                 }
 
+                if (commentText.length > 500) {
+                    console.log('Validation failed: Comment too long');
+                    alert('Comment is too long (max 500 characters)');
+                    return;
+                }
+
+                // Show loading state
                 submitBtn.disabled = true;
+                const originalText = submitBtn.textContent;
                 submitBtn.textContent = 'Posting...';
 
+                // Prepare payload
                 const payload = {
                     article_id: articleId,
                     comment_text: commentText
                 };
 
-                if (nickname) {
+                // Only add nickname if user is not subscribed AND nickname is provided
+                if (!subscriberInfo && nickname) {
                     payload.nickname = nickname;
                 }
 
+                console.log('Final payload:', {
+                    payload: payload,
+                    payloadJSON: JSON.stringify(payload),
+                    payloadSize: JSON.stringify(payload).length
+                });
+
+                // Send request
+                console.log('Sending POST request to /api/article-comment');
+                
                 fetch('/api/article-comment', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify(payload)
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) throw new Error(data.error);
-                    newForm.reset();
-                    loadComments(articleId, container);
+                .then(response => {
+                    console.log('Response received:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        ok: response.ok
+                    });
+                    
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            console.log('Error response data:', errorData);
+                            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                        }).catch(jsonError => {
+                            console.log('Failed to parse error JSON:', jsonError);
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        });
+                    }
+                    
+                    return response.json();
                 })
-                .catch(err => {
-                    console.error('Error posting comment:', err);
+                .then(data => {
+                    console.log('Success response:', data);
+                    
+                    // Reset form
+                    newForm.reset();
+                    
+                    // Reload comments
+                    loadComments(articleId, container);
+                    
+                    // Update subscriber stats if applicable
+                    if (subscriberInfo && data.is_subscriber) {
+                        console.log('Comment posted by subscriber - updating stats');
+                        // Note: updateSubscriberStats function can be simple or removed
+                        // since we're not showing stats in the UI anymore
+                    }
+                    
+                    console.log('Comment posted successfully!');
+                })
+                .catch(error => {
+                    console.error('Comment submission error:', error);
+                    alert('Failed to post comment: ' + error.message);
                 })
                 .finally(() => {
+                    // Reset button state
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Post';
+                    submitBtn.textContent = originalText;
+                    console.log(`=== COMMENT FORM SUBMISSION END ===`);
                 });
             });
+            
+        } else {
+            console.error(`No comment form found in container for ${articleId}`);
+        }
+    });
+    
+    console.log('Comment forms setup complete');
+}
+
+// Helper function to load comments
+function loadComments(articleId, container) {
+    console.log(`Loading comments for article: ${articleId}`);
+    
+    fetch(`/api/article-comments?article_id=${encodeURIComponent(articleId)}`)
+        .then(response => {
+            console.log('Comments response:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Comments data received:', data);
+            
+            const commentsList = container.querySelector('.comments-list');
+            if (!commentsList) {
+                console.error('Comments list element not found');
+                return;
+            }
+            
+            commentsList.innerHTML = '';
+
+            if (data.comments && data.comments.length === 0) {
+                commentsList.innerHTML = `
+                    <p class="text-muted text-center py-3" style="font-size: 0.8em;">
+                        No comments yet. Be the first to comment!
+                    </p>`;
+            } else if (data.comments) {
+                console.log(`Rendering ${data.comments.length} comments`);
+                data.comments.forEach(comment => {
+                    const commentEl = createInstagramComment(comment);
+                    commentsList.appendChild(commentEl);
+                });
+            }
+        })
+        .catch(err => {
+            console.error('Error loading comments:', err);
+            const commentsList = container.querySelector('.comments-list');
+            if (commentsList) {
+                commentsList.innerHTML = `
+                    <p class="text-danger text-center py-3" style="font-size: 0.8em;">
+                        Error loading comments. Please try again.
+                    </p>`;
+            }
+        });
+}
+
+// Helper function to create Instagram-style comment elements
+function createInstagramComment(comment) {
+    const commentEl = document.createElement('div');
+    commentEl.className = 'comment';
+    commentEl.dataset.commentId = comment.id;
+    
+    const likes = comment.likes || 0;
+    const userLiked = comment.userLiked || false;
+    
+    // Handle timestamp (Instagram style - shorter)
+    let formattedDate = 'now';
+    if (comment.timestamp) {
+        try {
+            const date = new Date(comment.timestamp.seconds ? comment.timestamp.seconds * 1000 : comment.timestamp);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - date) / (1000 * 60));
+            
+            if (diffMinutes < 1) {
+                formattedDate = 'now';
+            } else if (diffMinutes < 60) {
+                formattedDate = `${diffMinutes}m`;
+            } else if (diffMinutes < 1440) {
+                formattedDate = `${Math.floor(diffMinutes / 60)}h`;
+            } else {
+                formattedDate = `${Math.floor(diffMinutes / 1440)}d`;
+            }
+        } catch (e) {
+            formattedDate = 'now';
+        }
+    }
+    
+    // Show special indicator for subscribers
+    const subscriberBadge = comment.is_subscriber ? ' <span class="subscriber-badge">✓</span>' : '';
+    
+    commentEl.innerHTML = `
+        <div class="comment-header">
+            <span class="comment-nickname">${escapeHtml(comment.nickname || 'Anonymous')}${subscriberBadge}</span>
+            <span class="comment-timestamp">${formattedDate}</span>
+        </div>
+        
+        <div class="comment-content">
+            <div class="comment-text">${escapeHtml(comment.comment)}</div>
+        </div>
+        
+        <div class="comment-actions">
+            <button class="comment-like-btn ${userLiked ? 'liked' : ''}" 
+                    title="${userLiked ? 'Unlike' : 'Like'}">
+                Like
+            </button>
+            ${likes > 0 ? `<span class="comment-like-count">${likes} ${likes === 1 ? 'like' : 'likes'}</span>` : ''}
+        </div>
+    `;
+    
+    // Add event listener for comment like
+    const likeBtn = commentEl.querySelector('.comment-like-btn');
+    likeBtn.addEventListener('click', () => handleCommentLike(commentEl));
+    
+    return commentEl;
+}
+
+// Helper function to handle comment likes
+async function handleCommentLike(commentElement) {
+    const commentId = commentElement.dataset.commentId;
+    const articleId = commentElement.closest('.article-interactions').dataset.articleId;
+    const likeBtn = commentElement.querySelector('.comment-like-btn');
+    
+    if (likeBtn.disabled) return;
+    
+    likeBtn.disabled = true;
+    likeBtn.style.opacity = '0.6';
+    
+    try {
+        const response = await fetch('/api/comment-like', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                comment_id: commentId,
+                article_id: articleId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Update button state
+        const isLiked = result.user_liked;
+        const newLikeCount = result.likes || 0;
+        
+        if (isLiked) {
+            likeBtn.classList.add('liked');
+            likeBtn.textContent = 'Unlike';
+        } else {
+            likeBtn.classList.remove('liked');
+            likeBtn.textContent = 'Like';
+        }
+        
+        // Update like count display
+        const actions = commentElement.querySelector('.comment-actions');
+        let likeCountEl = actions.querySelector('.comment-like-count');
+        
+        if (newLikeCount > 0) {
+            if (!likeCountEl) {
+                likeCountEl = document.createElement('span');
+                likeCountEl.className = 'comment-like-count';
+                actions.appendChild(likeCountEl);
+            }
+            likeCountEl.textContent = `${newLikeCount} ${newLikeCount === 1 ? 'like' : 'likes'}`;
+        } else if (likeCountEl) {
+            likeCountEl.remove();
+        }
+        
+    } catch (error) {
+        console.error('Comment like error:', error);
+    } finally {
+        likeBtn.disabled = false;
+        likeBtn.style.opacity = '';
+    }
+}
+
+
+// ADD this new function to handle subscriber status changes:
+
+function updateCommentFormsForSubscriber() {
+    console.log('Updating comment forms for subscriber status:', !!subscriberInfo);
+    
+    document.querySelectorAll('.comment-form').forEach(form => {
+        const nicknameInput = form.querySelector('input[name="nickname"]');
+        
+        if (nicknameInput) {
+            if (subscriberInfo) {
+                // Hide nickname input for subscribers
+                nicknameInput.style.display = 'none';
+                nicknameInput.required = false;
+                
+                // Optional: Add a small indicator showing who will post
+                let subscriberIndicator = form.querySelector('.subscriber-indicator');
+                if (!subscriberIndicator) {
+                    subscriberIndicator = document.createElement('small');
+                    subscriberIndicator.className = 'subscriber-indicator text-muted';
+                    subscriberIndicator.style.fontSize = '0.75em';
+                    subscriberIndicator.style.marginBottom = '0.5rem';
+                    subscriberIndicator.style.display = 'block';
+                    
+                    // Insert before the comment input
+                    const commentInput = form.querySelector('input[name="comment"]');
+                    form.insertBefore(subscriberIndicator, commentInput.parentElement);
+                }
+                subscriberIndicator.innerHTML = `<i class="fas fa-user"></i> Posting as: <strong>${subscriberInfo.name}</strong>`;
+                
+            } else {
+                // Show nickname input for anonymous users
+                nicknameInput.style.display = 'block';
+                nicknameInput.required = false; // Keep optional
+                
+                // Remove subscriber indicator if it exists
+                const subscriberIndicator = form.querySelector('.subscriber-indicator');
+                if (subscriberIndicator) {
+                    subscriberIndicator.remove();
+                }
+            }
         }
     });
 }
 
+// UPDATE your loadSubscriberStatus function to call this update:
+
+async function loadSubscriberStatus() {
+    try {
+        const response = await fetch('/api/subscriber-status');
+        const data = await response.json();
+        
+        if (data.subscribed) {
+            subscriberInfo = data;
+            console.log('User is subscribed:', data.name);
+        } else {
+            subscriberInfo = null;
+            console.log('User is not subscribed');
+        }
+        
+        // Update theme controls to show subscriber status
+        updateThemeControlsWithSubscriber();
+        
+        // UPDATE: Also update comment forms
+        updateCommentFormsForSubscriber();
+        
+    } catch (error) {
+        console.error('Error loading subscriber status:', error);
+    }
+}
+
+// ALSO update your newsletter subscription success handler:
+
+// In your newsletter form submission success handler, add this line:
+// After successful subscription:
+if (typeof loadSubscriberStatus === 'function') {
+    loadSubscriberStatus().then(() => {
+        // This will automatically update the comment forms
+        console.log('Subscriber status updated after newsletter subscription');
+    });
+}
 // Add this JavaScript to your existing news.js file
 
 // ===== FAQ SYSTEM =====

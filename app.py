@@ -28,6 +28,9 @@ from functools import wraps
 from typing import Dict, Optional
 import html
 import re
+# Add these imports to your existing imports section
+from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
 
 # Load environment variables first
 load_dotenv()
@@ -64,6 +67,44 @@ dramatiq.set_broker(redis_broker)
 broker = redis_broker
 gnews_client = GNewsClient() 
 
+NEWSLETTER_CATEGORIES = [
+    {'id': 'general', 'name': 'General News', 'description': 'Top stories and headlines'},
+    {'id': 'technology', 'name': 'Technology', 'description': 'Tech news and innovations'},
+    {'id': 'business', 'name': 'Business', 'description': 'Business and finance updates'},
+    {'id': 'sports', 'name': 'Sports', 'description': 'Sports news and scores'},
+    {'id': 'entertainment', 'name': 'Entertainment', 'description': 'Entertainment and celebrity news'},
+    {'id': 'health', 'name': 'Health', 'description': 'Health and wellness news'},
+    {'id': 'science', 'name': 'Science', 'description': 'Scientific discoveries and research'},
+    {'id': 'world', 'name': 'World News', 'description': 'International news and events'}
+]
+
+
+def get_user_from_session():
+    """Get user data from session if subscribed"""
+    if 'subscriber_id' in session:
+        try:
+            user_doc = db.collection('newsletter_subscribers').document(session['subscriber_id']).get()
+            if user_doc.exists:
+                return user_doc.to_dict()
+        except Exception as e:
+            if app.debug:
+                app.logger.error(f"Error getting user from session: {e}")
+    return None
+
+def get_subscriber_by_email(email):
+    """Get subscriber by email"""
+    try:
+        subscribers = db.collection('newsletter_subscribers').where('email', '==', email).limit(1).get()
+        for doc in subscribers:
+            return {'id': doc.id, **doc.to_dict()}
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting subscriber by email: {e}")
+    return None
+
+def generate_user_token():
+    """Generate secure token for user identification"""
+    return secrets.token_urlsafe(32)
 # ============================================
 # SECURITY HEADERS & MIDDLEWARE
 # ============================================
@@ -373,52 +414,124 @@ def submit_feedback():
 @app.route('/api/article-comment', methods=['POST'])
 @rate_limit('api_comments')
 def post_comment():
-    """SECURED comment posting"""
+    """SECURED comment posting with subscriber tracking"""
     try:
-        data = request.json
+        # DEBUG: Log request details
+        print("=== DEBUG COMMENT REQUEST ===")
+        print(f"Method: {request.method}")
+        print(f"Content-Type: {request.content_type}")
+        print(f"Raw data: {request.get_data()}")
+        
+        # Get JSON data
+        data = request.get_json()
+        print(f"Parsed JSON: {data}")
+        print(f"JSON type: {type(data)}")
+        
+        if not data:
+            print("ERROR: No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Extract fields
         article_id = data.get('article_id')
         comment_text = data.get('comment_text', '').strip()
-        nickname = data.get('nickname', '').strip()
+        
+        print(f"article_id: '{article_id}' (type: {type(article_id)})")
+        print(f"comment_text: '{comment_text}' (type: {type(comment_text)})")
+        print("===========================")
 
-        if not article_id or not comment_text:
-            return jsonify({"error": "Missing required fields"}), 400
+        # Validation
+        if not article_id:
+            print("ERROR: Missing article_id")
+            return jsonify({"error": "Missing article ID"}), 400
+            
+        if not comment_text:
+            print("ERROR: Missing or empty comment_text")
+            return jsonify({"error": "Missing comment text"}), 400
 
-        # Validate and sanitize
+        # Validate text length
         is_valid, error_msg = validate_text_length(comment_text, min_len=1, max_len=500)
         if not is_valid:
+            print(f"ERROR: Text validation failed: {error_msg}")
             return jsonify({"error": error_msg}), 400
         
+        # Sanitize inputs
         comment_text = sanitize_html_input(comment_text)
         article_id = sanitize_html_input(article_id)
         
-        # Validate article_id format
-        if not re.match(r'^[a-zA-Z0-9_-]+$', article_id):
-            return jsonify({"error": "Invalid request"}), 400
+        # Validate article_id format (basic check)
+        if len(article_id) > 500:  # Reasonable limit
+            print(f"ERROR: Article ID too long: {len(article_id)}")
+            return jsonify({"error": "Invalid article ID"}), 400
 
-        # Generate nickname if not provided
-        if not nickname:
-            import random
-            random_names = ["Anonymous", "Reader", "Observer", "Visitor", "User"]
-            nickname = random.choice(random_names) + str(random.randint(100, 999))
+        # Check if user is subscribed
+        user = get_user_from_session()
+        if user:
+            # Use subscriber name
+            nickname = user['name']
+            is_subscriber = True
+            subscriber_id = session['subscriber_id']
+            print(f"Subscriber comment from: {nickname}")
         else:
-            nickname = sanitize_html_input(nickname[:50])
+            # Generate anonymous nickname
+            nickname_input = data.get('nickname', '').strip()
+            if nickname_input:
+                nickname = sanitize_html_input(nickname_input[:50])
+            else:
+                import random
+                random_names = ["Anonymous", "Reader", "Observer", "Visitor", "User"]
+                nickname = random.choice(random_names) + str(random.randint(100, 999))
+            is_subscriber = False
+            subscriber_id = None
+            print(f"Anonymous comment from: {nickname}")
 
-        # Save comment
-        doc_ref = db.collection('comments').document(article_id).collection('comments').document()
+        # Prepare comment data
         comment_data = {
             'nickname': nickname,
             'comment': comment_text,
             'timestamp': firestore.SERVER_TIMESTAMP,
             'likes': 0,
-            'liked_by': []
+            'liked_by': [],
+            'is_subscriber': is_subscriber,
+            'subscriber_id': subscriber_id
         }
-        doc_ref.set(comment_data)
+        
+        print(f"Saving comment to collection: comments/{article_id}/comments")
+        print(f"Comment data: {comment_data}")
 
-        return jsonify({"message": "Comment posted", "nickname": nickname})
-    
+        # Save comment to Firestore
+        doc_ref = db.collection('comments').document(article_id).collection('comments').document()
+        doc_ref.set(comment_data)
+        
+        print(f"Comment saved with ID: {doc_ref.id}")
+        
+        # Update subscriber comment count
+        if is_subscriber:
+            try:
+                db.collection('newsletter_subscribers').document(subscriber_id).update({
+                    'total_comments': firestore.Increment(1),
+                    'last_activity': firestore.SERVER_TIMESTAMP
+                })
+                print(f"Updated subscriber {subscriber_id} comment count")
+            except Exception as e:
+                print(f"Warning: Failed to update subscriber comment count: {e}")
+
+        # Prepare response
+        response_data = {
+            "message": "Comment posted successfully", 
+            "nickname": nickname,
+            "is_subscriber": is_subscriber,
+            "comment_id": doc_ref.id
+        }
+        
+        print(f"Sending response: {response_data}")
+        return jsonify(response_data)
+        
     except Exception as e:
-        if app.debug:
-            app.logger.error(f"Error posting comment: {str(e)}")
+        print(f"ERROR in post_comment: {str(e)}")
+        print(f"Exception type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        
         return jsonify({"error": "Failed to post comment"}), 500
 
 def get_user_id():
@@ -529,10 +642,11 @@ def handle_comment_like():
             app.logger.error(f"Error handling comment like: {str(e)}")
         return jsonify({'error': 'Service error'}), 500
 
+# Replace your existing handle_article_like function:
 @app.route('/api/article-like', methods=['POST'])
 @rate_limit('api_comments')
 def handle_article_like():
-    """Handle article likes"""
+    """Handle article likes with subscriber tracking"""
     try:
         data = request.get_json()
         article_id = data.get('article_id')
@@ -541,6 +655,7 @@ def handle_article_like():
             return jsonify({'error': 'Invalid request'}), 400
         
         user_id = get_user_id()
+        user = get_user_from_session()
         article_ref = db.collection('article_likes').document(article_id)
         
         @firestore.transactional
@@ -548,9 +663,11 @@ def handle_article_like():
             article_doc = article_ref.get(transaction=transaction)
             
             if not article_doc.exists:
-                article_data = {'likes': 0, 'liked_by': []}
+                article_data = {'likes': 0, 'liked_by': [], 'subscriber_likes': {}}
             else:
                 article_data = article_doc.to_dict()
+                if 'subscriber_likes' not in article_data:
+                    article_data['subscriber_likes'] = {}
             
             if 'likes' not in article_data:
                 article_data['likes'] = 0
@@ -558,6 +675,7 @@ def handle_article_like():
                 article_data['liked_by'] = []
             
             liked_by = article_data['liked_by']
+            subscriber_likes = article_data['subscriber_likes']
             current_likes = article_data['likes']
             user_liked = user_id in liked_by
             
@@ -565,17 +683,51 @@ def handle_article_like():
                 liked_by.remove(user_id)
                 current_likes = max(0, current_likes - 1)
                 new_user_liked = False
+                
+                # Remove from subscriber likes if applicable
+                if user and session['subscriber_id'] in subscriber_likes:
+                    del subscriber_likes[session['subscriber_id']]
+                    
             else:
                 if user_id not in liked_by:
                     liked_by.append(user_id)
                 current_likes += 1
                 new_user_liked = True
+                
+                # Add to subscriber likes if applicable
+                if user:
+                    subscriber_likes[session['subscriber_id']] = {
+                        'name': user['name'],
+                        'timestamp': firestore.SERVER_TIMESTAMP
+                    }
             
+            # Update article likes
             transaction.set(article_ref, {
                 'likes': current_likes,
                 'liked_by': liked_by,
+                'subscriber_likes': subscriber_likes,
                 'updated_at': firestore.SERVER_TIMESTAMP
             })
+            
+            # Update subscriber total likes count
+            if user and new_user_liked:
+                try:
+                    subscriber_ref = db.collection('newsletter_subscribers').document(session['subscriber_id'])
+                    transaction.update(subscriber_ref, {
+                        'total_likes': firestore.Increment(1),
+                        'last_activity': firestore.SERVER_TIMESTAMP
+                    })
+                except Exception:
+                    pass  # Don't fail if subscriber update fails
+            elif user and not new_user_liked:
+                try:
+                    subscriber_ref = db.collection('newsletter_subscribers').document(session['subscriber_id'])
+                    transaction.update(subscriber_ref, {
+                        'total_likes': firestore.Increment(-1),
+                        'last_activity': firestore.SERVER_TIMESTAMP
+                    })
+                except Exception:
+                    pass
             
             return {
                 'likes': current_likes,
@@ -594,6 +746,39 @@ def handle_article_like():
         if app.debug:
             app.logger.error(f"Error handling article like: {str(e)}")
         return jsonify({'error': 'Service error'}), 500
+@app.route('/api/subscriber-leaderboard')
+@rate_limit('api_general')
+def subscriber_leaderboard():
+    """Get top subscribers by engagement"""
+    try:
+        # Get top 10 subscribers by total engagement (likes + comments)
+        subscribers = db.collection('newsletter_subscribers')\
+            .where('active', '==', True)\
+            .order_by('total_likes', direction=firestore.Query.DESCENDING)\
+            .limit(10)\
+            .get()
+        
+        leaderboard = []
+        for doc in subscribers:
+            data = doc.to_dict()
+            total_engagement = (data.get('total_likes', 0) + data.get('total_comments', 0))
+            if total_engagement > 0:  # Only show users with activity
+                leaderboard.append({
+                    'name': data.get('name', 'Anonymous'),
+                    'total_likes': data.get('total_likes', 0),
+                    'total_comments': data.get('total_comments', 0),
+                    'total_engagement': total_engagement
+                })
+        
+        # Sort by total engagement
+        leaderboard.sort(key=lambda x: x['total_engagement'], reverse=True)
+        
+        return jsonify({'leaderboard': leaderboard[:10]})
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting leaderboard: {e}")
+        return jsonify({'error': 'Failed to load leaderboard'}), 500
 
 @app.route('/api/article-likes', methods=['GET'])
 @rate_limit('api_general')
@@ -1116,29 +1301,160 @@ def get_task_status(task_id):
 # OTHER ROUTES
 # ============================================
 
+# Replace the existing newsletter_subscribe route with this enhanced version
 @app.route('/api/newsletter-subscribe', methods=['POST'])
 @rate_limit('api_general')
 def newsletter_subscribe():
-    """Newsletter subscription"""
-    data = request.get_json()
-    email = data.get('email', '').strip().lower()
-    categories = data.get('categories', [])
-
-    if not email or '@' not in email:
-        return jsonify({'error': 'Invalid email address'}), 400
-
+    """Enhanced newsletter subscription with user tracking"""
     try:
-        db.collection('newsletter_subscribers').add({
-            'email': email,
-            'categories': categories,
-            'timestamp': firestore.SERVER_TIMESTAMP
-        })
-        return jsonify({'message': 'Subscription successful!'})
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip().lower()
+        categories = data.get('categories', [])
+        
+        # Validation
+        if not name or len(name) < 2:
+            return jsonify({'error': 'Name must be at least 2 characters long'}), 400
+        
+        if not email or '@' not in email or len(email) < 5:
+            return jsonify({'error': 'Invalid email address'}), 400
+        
+        if not categories or not isinstance(categories, list):
+            return jsonify({'error': 'Please select at least one category'}), 400
+        
+        # Sanitize inputs
+        name = sanitize_html_input(name)[:100]
+        email = sanitize_html_input(email)[:255]
+        
+        # Validate categories
+        valid_category_ids = [cat['id'] for cat in NEWSLETTER_CATEGORIES]
+        categories = [cat for cat in categories if cat in valid_category_ids]
+        
+        if not categories:
+            return jsonify({'error': 'Please select valid categories'}), 400
+        
+        # Check if user already exists
+        existing_subscriber = get_subscriber_by_email(email)
+        
+        if existing_subscriber:
+            # Update existing subscriber
+            doc_ref = db.collection('newsletter_subscribers').document(existing_subscriber['id'])
+            doc_ref.update({
+                'name': name,
+                'categories': categories,
+                'updated_at': firestore.SERVER_TIMESTAMP,
+                'active': True
+            })
+            
+            # Set session
+            session['subscriber_id'] = existing_subscriber['id']
+            session['subscriber_name'] = name
+            session['subscriber_email'] = email
+            session.permanent = True
+            
+            return jsonify({
+                'message': 'Subscription updated successfully!',
+                'subscriber_name': name,
+                'existing_user': True
+            })
+        else:
+            # Create new subscriber
+            user_token = generate_user_token()
+            subscriber_data = {
+                'name': name,
+                'email': email,
+                'categories': categories,
+                'created_at': firestore.SERVER_TIMESTAMP,
+                'updated_at': firestore.SERVER_TIMESTAMP,
+                'active': True,
+                'user_token': user_token,
+                'total_likes': 0,
+                'total_comments': 0,
+                'user_ip': request.environ.get('REMOTE_ADDR', 'unknown')
+            }
+            
+            doc_ref = db.collection('newsletter_subscribers').add(subscriber_data)
+            subscriber_id = doc_ref[1].id
+            
+            # Set session
+            session['subscriber_id'] = subscriber_id
+            session['subscriber_name'] = name
+            session['subscriber_email'] = email
+            session.permanent = True
+            
+            return jsonify({
+                'message': 'Subscription successful! You can now like and comment with your name.',
+                'subscriber_name': name,
+                'existing_user': False
+            })
+            
     except Exception as e:
         if app.debug:
             app.logger.error(f'Newsletter subscription error: {e}')
-        return jsonify({'error': 'Subscription failed'}), 500
+        return jsonify({'error': 'Subscription failed. Please try again.'}), 500
+# Add this new route for newsletter management
+@app.route('/newsletter')
+def newsletter_page():
+    """Newsletter subscription page"""
+    user = get_user_from_session()
+    return render_template('newsletter.html', 
+                         categories=NEWSLETTER_CATEGORIES,
+                         user=user)
 
+@app.route('/api/newsletter-unsubscribe', methods=['POST'])
+@rate_limit('api_general')
+def newsletter_unsubscribe():
+    """Unsubscribe from newsletter"""
+    try:
+        user = get_user_from_session()
+        if not user:
+            return jsonify({'error': 'Not subscribed'}), 400
+        
+        # Deactivate subscription instead of deleting
+        db.collection('newsletter_subscribers').document(session['subscriber_id']).update({
+            'active': False,
+            'unsubscribed_at': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Clear session
+        session.pop('subscriber_id', None)
+        session.pop('subscriber_name', None)
+        session.pop('subscriber_email', None)
+        
+        return jsonify({'message': 'Successfully unsubscribed'})
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f'Newsletter unsubscribe error: {e}')
+        return jsonify({'error': 'Unsubscribe failed'}), 500
+@app.route('/api/subscriber-status')
+@rate_limit('api_general')
+def subscriber_status():
+    """Get current subscriber status"""
+    user = get_user_from_session()
+    if user:
+        return jsonify({
+            'subscribed': True,
+            'name': user.get('name'),
+            'email': user.get('email'),
+            'categories': user.get('categories', []),
+            'total_likes': user.get('total_likes', 0),
+            'total_comments': user.get('total_comments', 0)
+        })
+    return jsonify({'subscribed': False})
+
+
+@app.context_processor
+def inject_subscriber_status():
+    """Inject subscriber status into all templates"""
+    user = get_user_from_session()
+    return {
+        'subscriber': user,
+        'newsletter_categories': NEWSLETTER_CATEGORIES
+    }
 @app.route('/stream-temp-audio/<path:path>')
 def stream_temp_audio(path):
     """Stream temporary audio files"""

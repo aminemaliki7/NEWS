@@ -6,7 +6,7 @@
 
   <!-- SEO Meta -->
   <meta name="description" content="REALTalk — The Digital Journal You Can Listen To. Stay updated with world, business, technology, and science news, with audio narration." />
-  <link rel="canonical" href="https://newsnap.space/" />7
+  <link rel="canonical" href="https://newsnap.space/" />
   <!-- ADD THESE META TAGS -->
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-Frame-Options" content="DENY">
@@ -263,7 +263,7 @@
                  style="max-height: 200px; overflow-y: auto;">
               <div class="comments-list">
                 <p class="text-muted text-center py-3" style="font-size: 0.8em;">
-                  No comments yet. Be the first to comment!
+                   Be the first to comment!
                 </p>
               </div>
             </div>
@@ -542,6 +542,7 @@ body.dark-mode .comment:hover {
   </div>
 <!-- Newsletter Modal -->
 <!-- Newsletter Modal -->
+<!-- Newsletter Modal - REPLACE your existing modal with this -->
 <div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -551,59 +552,49 @@ body.dark-mode .comment:hover {
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
+          <!-- ADD NAME INPUT HERE -->
+          <div class="mb-3">
+            <label for="newsletterName" class="form-label">Your Name:</label>
+            <input type="text" class="form-control" id="newsletterName" required minlength="2" maxlength="100" placeholder="Enter your full name">
+          </div>
+          
           <div class="mb-3">
             <label for="newsletterEmail" class="form-label">Your Email:</label>
-            <input type="email" class="form-control" id="newsletterEmail" required>
+            <input type="email" class="form-control" id="newsletterEmail" required placeholder="Enter your email address">
           </div>
           <div class="mb-3">
             <label class="form-label">Select topics you are interested in:</label>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="World News" id="catWorld">
+              <input class="form-check-input" type="checkbox" value="general" id="catGeneral">
+              <label class="form-check-label" for="catGeneral">📰 General News</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="world" id="catWorld">
               <label class="form-check-label" for="catWorld">🌍 World News</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Business & Finance" id="catBusiness">
-              <label class="form-check-label" for="catBusiness">💰 Business & Finance</label>
+              <input class="form-check-input" type="checkbox" value="business" id="catBusiness">
+              <label class="form-check-label" for="catBusiness">💰 Business</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Technology & AI" id="catAI">
-              <label class="form-check-label" for="catAI">🤖 Technology & AI</label>
+              <input class="form-check-input" type="checkbox" value="technology" id="catTechnology">
+              <label class="form-check-label" for="catTechnology">🤖 Technology</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Crypto & Blockchain" id="catCrypto">
-              <label class="form-check-label" for="catCrypto">🪙 Crypto & Blockchain</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Sports" id="catSports">
+              <input class="form-check-input" type="checkbox" value="sports" id="catSports">
               <label class="form-check-label" for="catSports">🏀 Sports</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Entertainment" id="catEntertainment">
+              <input class="form-check-input" type="checkbox" value="entertainment" id="catEntertainment">
               <label class="form-check-label" for="catEntertainment">🎬 Entertainment</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Health & Wellness" id="catHealth">
-              <label class="form-check-label" for="catHealth">🏥 Health & Wellness</label>
+              <input class="form-check-input" type="checkbox" value="health" id="catHealth">
+              <label class="form-check-label" for="catHealth">🏥 Health</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Science & Space" id="catScience">
-              <label class="form-check-label" for="catScience">🚀 Science & Space</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Lifestyle & Travel" id="catLifestyle">
-              <label class="form-check-label" for="catLifestyle">✈️ Lifestyle & Travel</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Politics" id="catPolitics">
-              <label class="form-check-label" for="catPolitics">🗳️ Politics</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Opinion & Analysis" id="catOpinion">
-              <label class="form-check-label" for="catOpinion">🧐 Opinion & Analysis</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="Breaking News" id="catBreaking">
-              <label class="form-check-label" for="catBreaking">⚡ Breaking News</label>
+              <input class="form-check-input" type="checkbox" value="science" id="catScience">
+              <label class="form-check-label" for="catScience">🚀 Science</label>
             </div>
           </div>
         </div>
