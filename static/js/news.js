@@ -593,6 +593,7 @@ function displayNews(articlesData) {
 // Updated createArticleElement function - REPLACE the existing one in your JavaScript file
 
 // FIXED: Update createArticleElement to use correct selector
+// IMPROVED: Update the createArticleElement function to store article index
 function createArticleElement(article, index) {
     const template = newsTemplate.content.cloneNode(true);
     const t = translations.en;
@@ -637,9 +638,111 @@ function createArticleElement(article, index) {
     const interactionsSection = template.querySelector('.article-interactions');
     if (interactionsSection) {
         interactionsSection.dataset.articleId = articleId;
+        // IMPROVED: Also store the article index for easier lookup
+        interactionsSection.dataset.articleIndex = index;
     }
 
     return template;
+}
+
+// IMPROVED: Update setupCommentForms to use article index for share button
+function setupCommentForms() {
+    console.log('Setting up comment forms...');
+    
+    document.querySelectorAll('.article-interactions').forEach((container, containerIndex) => {
+        const articleId = container.dataset.articleId;
+        const articleIndex = container.dataset.articleIndex; // NEW: Get the article index
+        
+        console.log(`Container ${containerIndex}:`, {
+            hasDataset: !!container.dataset,
+            articleId: articleId,
+            articleIndex: articleIndex // NEW: Log the index
+        });
+        
+        if (!articleId) {
+            console.error(`No articleId found on container ${containerIndex}:`, container);
+            return;
+        }
+        
+        const likeBtn = container.querySelector('.like-btn');
+        const commentBtn = container.querySelector('.comment-btn');
+        const shareBtn = container.querySelector('.share-btn');
+        const commentsContainer = container.querySelector('.comments-container');
+        const form = container.querySelector('.comment-form');
+        const likeCountEl = container.querySelector('.like-count');
+
+        // ... existing code for like button, comment button, etc. ...
+
+        // IMPROVED: Setup share button with article index
+        if (shareBtn && articleIndex !== undefined) {
+            shareBtn.addEventListener('click', function() {
+                console.log('Share button clicked for article index:', articleIndex);
+                handleArticleShareByIndex(parseInt(articleIndex), shareBtn); // NEW: Use index-based function
+            });
+        }
+
+        // ... rest of the existing setupCommentForms code ...
+    });
+}
+
+// NEW: Simplified share function that uses article index directly
+async function handleArticleShareByIndex(articleIndex, shareBtn) {
+    if (shareBtn.classList.contains('loading')) return;
+    
+    shareBtn.classList.add('loading');
+    shareBtn.classList.add('sharing');
+    
+    try {
+        // Get the article directly by index
+        const article = articles[articleIndex];
+        
+        if (!article) {
+            throw new Error('Article not found');
+        }
+        
+        console.log('Sharing article:', article.title); // Debug log
+        
+        // Prepare share data
+        const shareData = {
+            title: article.title || 'Check out this news article',
+            text: article.description || '',
+            url: article.url || window.location.href
+        };
+        
+        // Try native Web Share API first (mobile)
+        if (navigator.share) {
+            await navigator.share(shareData);
+        } else {
+            // Fallback to clipboard copy (desktop)
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(shareData.url);
+                showShareFeedback('Link copied to clipboard!');
+            } else {
+                // Final fallback - create temporary input
+                const tempInput = document.createElement('input');
+                tempInput.value = shareData.url;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showShareFeedback('Link copied!');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Share error:', error);
+        
+        // If user cancelled share, don't show error
+        if (error.name !== 'AbortError') {
+            showShareFeedback('Unable to share article', 'error');
+        }
+        
+    } finally {
+        shareBtn.classList.remove('loading');
+        setTimeout(() => {
+            shareBtn.classList.remove('sharing');
+        }, 600);
+    }
 }
 function stopActiveAudio() {
     if (activeAudio) {
@@ -1235,6 +1338,7 @@ function setupCommentForms() {
 }
 
 // NEW: Handle article share
+// FIXED: Handle article share - now correctly identifies the article
 async function handleArticleShare(articleId, shareBtn) {
     if (shareBtn.classList.contains('loading')) return;
     
@@ -1242,13 +1346,37 @@ async function handleArticleShare(articleId, shareBtn) {
     shareBtn.classList.add('sharing');
     
     try {
-        // Get the article data for sharing
-        const articleIndex = parseInt(articleId) || 0;
-        const article = articles[articleIndex] || null;
+        // FIXED: Find the article by matching the articleId instead of using parseInt
+        let article = null;
+        
+        // Method 1: Find by matching articleId with generated IDs
+        for (let i = 0; i < articles.length; i++) {
+            const generatedId = btoa(articles[i].url || articles[i].title || articles[i].publishedAt || `${i}`);
+            if (generatedId === articleId) {
+                article = articles[i];
+                break;
+            }
+        }
+        
+        // Method 2: If not found, try to find by looking at the share button's position in DOM
+        if (!article) {
+            const shareButtonContainer = shareBtn.closest('.article-interactions');
+            const articleCard = shareButtonContainer.closest('.news-article');
+            const allArticleCards = document.querySelectorAll('.news-article');
+            
+            for (let i = 0; i < allArticleCards.length; i++) {
+                if (allArticleCards[i] === articleCard) {
+                    article = articles[i];
+                    break;
+                }
+            }
+        }
         
         if (!article) {
             throw new Error('Article not found');
         }
+        
+        console.log('Sharing article:', article.title); // Debug log
         
         // Prepare share data
         const shareData = {
