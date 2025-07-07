@@ -28,7 +28,7 @@ class GNewsClient:
         self.api_index = 0
         self.base_url = "https://gnews.io/api/v4"
     
-    def get_top_headlines(self, category=None, language="en", country="us", max_results=10, query=None):
+    def get_top_headlines(self, category=None, language="any", country="any", max_results=10, query=None):
         endpoint = f"{self.base_url}/top-headlines"
         
         params = {
@@ -78,7 +78,7 @@ class GNewsClient:
             "error": "Unable to load articles at the moment."
         }
     
-    def search_news(self, query, language="en", country="us", max_results=10, from_date=None, to_date=None):
+    def search_news(self, query, language="any", country="any", max_results=10, from_date=None, to_date=None):
         endpoint = f"{self.base_url}/search"
         
         params = {

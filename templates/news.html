@@ -544,68 +544,95 @@ body.dark-mode .comment:hover {
 <!-- Newsletter Modal -->
 <!-- Newsletter Modal - REPLACE your existing modal with this -->
 <div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content p-3">
       <form id="newsletterForm">
-        <div class="modal-header">
-          <h5 class="modal-title" id="newsletterModalLabel">Subscribe to our Newsletter</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-header py-2">
+          <h6 class="modal-title w-100 text-center" id="newsletterModalLabel">
+            Subscribe to our Newsletter<br>
+            <small class="text-muted">Weekly trusted news in your inbox</small>
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.8rem;"></button>
         </div>
-        <div class="modal-body">
-          <!-- ADD NAME INPUT HERE -->
-          <div class="mb-3">
-            <label for="newsletterName" class="form-label">Your Name:</label>
-            <input type="text" class="form-control" id="newsletterName" required minlength="2" maxlength="100" placeholder="Enter your full name">
+
+        <div class="modal-body py-2">
+          <!-- Name Input -->
+          <div class="mb-2">
+            <label for="newsletterName" class="form-label small">Full Name</label>
+            <input type="text" class="form-control form-control-sm" id="newsletterName" name="name" required minlength="2" maxlength="100" placeholder="Your name">
           </div>
-          
-          <div class="mb-3">
-            <label for="newsletterEmail" class="form-label">Your Email:</label>
-            <input type="email" class="form-control" id="newsletterEmail" required placeholder="Enter your email address">
+
+          <!-- Email Input -->
+          <div class="mb-2">
+            <label for="newsletterEmail" class="form-label small">Email</label>
+            <input type="email" class="form-control form-control-sm" id="newsletterEmail" name="email" required placeholder="Your email">
           </div>
-          <div class="mb-3">
-            <label class="form-label">Select topics you are interested in:</label>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="general" id="catGeneral">
-              <label class="form-check-label" for="catGeneral">📰 General News</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="world" id="catWorld">
-              <label class="form-check-label" for="catWorld">🌍 World News</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="business" id="catBusiness">
-              <label class="form-check-label" for="catBusiness">💰 Business</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="technology" id="catTechnology">
-              <label class="form-check-label" for="catTechnology">🤖 Technology</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="sports" id="catSports">
-              <label class="form-check-label" for="catSports">🏀 Sports</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="entertainment" id="catEntertainment">
-              <label class="form-check-label" for="catEntertainment">🎬 Entertainment</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="health" id="catHealth">
-              <label class="form-check-label" for="catHealth">🏥 Health</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="science" id="catScience">
-              <label class="form-check-label" for="catScience">🚀 Science</label>
+
+          <!-- Topics -->
+          <div class="mb-2">
+            <label class="form-label small">Topics you like:</label>
+            <div class="row row-cols-2 g-1 small">
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="general" id="catGeneral" name="categories">
+                  <label class="form-check-label" for="catGeneral">📰 General</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="world" id="catWorld" name="categories">
+                  <label class="form-check-label" for="catWorld">🌍 World</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="business" id="catBusiness" name="categories">
+                  <label class="form-check-label" for="catBusiness">💰 Business</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="technology" id="catTechnology" name="categories">
+                  <label class="form-check-label" for="catTechnology">🤖 Tech</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="sports" id="catSports" name="categories">
+                  <label class="form-check-label" for="catSports">🏀 Sports</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="entertainment" id="catEntertainment" name="categories">
+                  <label class="form-check-label" for="catEntertainment">🎬 Entertain.</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="health" id="catHealth" name="categories">
+                  <label class="form-check-label" for="catHealth">🏥 Health</label>
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="science" id="catScience" name="categories">
+                  <label class="form-check-label" for="catScience">🚀 Science</label>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-dark">Subscribe</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+
+        <div class="modal-footer justify-content-between py-2">
+          <button type="submit" class="btn btn-dark btn-sm w-50">Subscribe</button>
+          <button type="button" class="btn btn-secondary btn-sm w-25" data-bs-dismiss="modal">Close</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
 
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -643,25 +670,25 @@ if (window.location.hostname !== 'localhost' &&
 
   <!-- FAQ Footer with Questions -->
   <div id="faqFooter">
-    <button class="faq-question" data-reply="REALTalk curates trustworthy news sources in an era of information overload. We focus on credible journalism and fact-based reporting from verified publishers.">
-      What is REALTalk?
-    </button>
+<button class="faq-question" data-reply="REALTalk is a clean news platform. Read or listen to trusted articles and get weekly updates via our newsletter.">
+    What is REALTalk?
+  </button>
 
-    <button class="faq-question" data-reply="Our sources include established news organizations like Reuters, Associated Press, BBC, and other verified publishers with strong editorial standards. We prioritize reliability over speed.">
-      How do you choose news sources?
-    </button>
+  <button class="faq-question" data-reply="We use trusted sources like The Guardian, BBC, AP, and others known for reliable reporting.">
+    How do you choose news sources?
+  </button>
 
-    <button class="faq-question" data-reply="Yes! You can comment on articles and engage with other readers. All comments are moderated to maintain quality discussion and prevent spam.">
-      Can I interact with other readers?
-    </button>
+  <button class="faq-question" data-reply="Yes — you can comment and discuss articles with other readers.">
+    Can I interact with other readers?
+  </button>
 
-    <button class="faq-question" data-reply="Use the voice selector under each article to choose your preferred language and narrator. We support English, Arabic, French, German, Spanish, and Portuguese.">
-      How does the audio feature work?
-    </button>
+  <button class="faq-question" data-reply=" Absolutely! use the feedback form at the bottom to let us know what you’d like to see.">
+    Can I suggest a new feature or source?
+  </button>
 
-    <button class="faq-question" data-reply="We value your input! Please share suggestions, report issues, or request new features using the form below.">
-      Send Feedback
-    </button>
+  <button class="faq-question" data-reply="Use the form below to share feedback, ideas, or report issues. We’re listening.">
+    Send Feedback
+  </button>
 
     <!-- Feedback Input (hidden by default) -->
     <div id="feedbackSection" style="display: none;">
