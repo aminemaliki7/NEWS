@@ -144,6 +144,38 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Inject voting styles
     injectVotingStyles();
+        const sudokuObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1 && node.id === 'sudokuGameContainer') {
+                    applySudokuDarkMode();
+                }
+            });
+        });
+    });
+    
+    sudokuObserver.observe(document.body, { 
+        childList: true,
+        subtree: false 
+    });
+    
+    const themeObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+                const existingGame = document.getElementById('sudokuGameContainer');
+                if (existingGame) {
+                    applySudokuDarkMode();
+                }
+            }
+        });
+    });
+    
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-bs-theme']
+    });
+    
+    console.log('✅ Sudoku game support initialized');
 });
 
 // Event listeners
@@ -201,7 +233,6 @@ function initializeTheme() {
         document.documentElement.setAttribute('data-bs-theme', 'light');
     }
 }
-
 function addThemeControl() {
     const header = document.querySelector('.container-fluid') || document.body;
     const controlsHTML = `
@@ -210,6 +241,23 @@ function addThemeControl() {
                 <button id="themeToggle" class="btn btn-outline-secondary btn-sm">
                     <span class="theme-icon">${darkMode ? '☀️' : '🌙'}</span>
                     <span class="theme-text">${translations.en[darkMode ? 'lightMode' : 'darkMode']}</span>
+                </button>
+            </div>
+
+            <div class="center-controls">
+                <button id="puzzleBtn" class="btn btn-outline-dark btn-sm puzzle-icon-btn" title="Daily Sudoku Challenge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <path d="M9 3v18"/>
+                        <path d="M15 3v18"/>
+                        <path d="M3 9h18"/>
+                        <path d="M3 15h18"/>
+                        <circle cx="7" cy="7" r="1" fill="currentColor"/>
+                        <circle cx="17" cy="7" r="1" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="7" cy="17" r="1" fill="currentColor"/>
+                        <circle cx="17" cy="17" r="1" fill="currentColor"/>
+                    </svg>
                 </button>
             </div>
 
@@ -230,8 +278,484 @@ function addThemeControl() {
 
         document.getElementById('themeToggle').addEventListener('click', toggleTheme);
         document.getElementById('newsletterBtn').addEventListener('click', openNewsletterPopup);
+        document.getElementById('puzzleBtn').addEventListener('click', startSudokuGame);
+        
+        // Add puzzle icon styles
+        addPuzzleIconStyles();
     }
 }
+
+// STEP 2: Add the puzzle icon styles
+function addPuzzleIconStyles() {
+    if (!document.getElementById('puzzle-icon-styles')) {
+        const style = document.createElement('style');
+        style.id = 'puzzle-icon-styles';
+        style.textContent = `
+            .puzzle-icon-btn {
+                transition: all 0.2s ease;
+                border-color: #333 !important;
+                color: #333 !important;
+            }
+            
+            .puzzle-icon-btn:hover {
+                background-color: #333 !important;
+                color: white !important;
+                border-color: #333 !important;
+                transform: translateY(-1px);
+            }
+            
+            .puzzle-icon-btn:active {
+                transform: scale(0.95);
+            }
+            
+            /* Dark mode support */
+            [data-bs-theme="dark"] .puzzle-icon-btn {
+                border-color: #fff !important;
+                color: #fff !important;
+            }
+            
+            [data-bs-theme="dark"] .puzzle-icon-btn:hover {
+                background-color: #fff !important;
+                color: #000 !important;
+                border-color: #fff !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// STEP 3: Main game functions
+function startSudokuGame() {
+    const puzzleBtn = document.getElementById('puzzleBtn');
+    
+    // Add click animation
+    puzzleBtn.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        puzzleBtn.style.transform = '';
+    }, 150);
+    
+    // Show the message and start game
+    showSudokuMessage();
+    
+    // Generate and display the game after a short delay
+    setTimeout(() => {
+        createSudokuGame();
+    }, 1000);
+}
+
+function showSudokuMessage() {
+    // Remove any existing game
+    const existingGame = document.getElementById('sudokuGameContainer');
+    if (existingGame) {
+        existingGame.remove();
+    }
+    
+    // Create and show the announcement
+    const announcement = document.createElement('div');
+    announcement.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: 2px solid #333;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        z-index: 10000;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        font-family: 'Times New Roman', Times, serif;
+        animation: puzzleAnnounce 1s ease-out;
+    `;
+    
+    announcement.innerHTML = `
+        <h3 style="margin: 0; color: #333;">Daily Sudoku Challenge</h3>
+        <p style="margin: 10px 0 0 0; font-size: 1.1em; color: #666;">Medium Level</p>
+    `;
+    
+    // Add animation
+    if (!document.getElementById('puzzle-animations')) {
+        const style = document.createElement('style');
+        style.id = 'puzzle-animations';
+        style.textContent = `
+            @keyframes puzzleAnnounce {
+                0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                50% { transform: translate(-50%, -50%) scale(1.05); }
+                100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+            @keyframes confettiFall {
+                to {
+                    transform: translateY(400px) rotate(720deg);
+                    opacity: 0;
+                }
+            }
+            @keyframes fadeOut {
+                to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(announcement);
+    
+    // Remove announcement after 1 second
+    setTimeout(() => {
+        announcement.remove();
+    }, 1000);
+}
+
+function createSudokuGame() {
+    // Create game container
+    const gameContainer = document.createElement('div');
+    gameContainer.id = 'sudokuGameContainer';
+    gameContainer.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: 2px solid #333;
+        border-radius: 10px;
+        padding: 20px;
+        z-index: 10000;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        font-family: 'Times New Roman', Times, serif;
+        text-align: center;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow: auto;
+    `;
+    
+    // The puzzle with some pre-filled numbers
+    const sudokuPuzzle = [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9]
+    ];
+    
+    // The complete solution
+    const sudokuSolution = [
+        [5, 3, 4, 6, 7, 8, 9, 1, 2],
+        [6, 7, 2, 1, 9, 5, 3, 4, 8],
+        [1, 9, 8, 3, 4, 2, 5, 6, 7],
+        [8, 5, 9, 7, 6, 1, 4, 2, 3],
+        [4, 2, 6, 8, 5, 3, 7, 9, 1],
+        [7, 1, 3, 9, 2, 4, 8, 5, 6],
+        [9, 6, 1, 5, 3, 7, 2, 8, 4],
+        [2, 8, 7, 4, 1, 9, 6, 3, 5],
+        [3, 4, 5, 2, 8, 6, 1, 7, 9]
+    ];
+    
+    gameContainer.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0; color: #333;">Daily Sudoku</h3>
+            <button id="closeSudoku" style="background: none; border: none; font-size: 1.5em; cursor: pointer;">×</button>
+        </div>
+        <div id="sudokuGrid" style="display: inline-block; border: 3px solid #333; background: #f8f9fa;"></div>
+        <div style="margin-top: 15px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <button id="checkSudoku" class="btn btn-success btn-sm">Check</button>
+            <button id="hintSudoku" class="btn btn-warning btn-sm">Hint</button>
+            <button id="showSolution" class="btn btn-info btn-sm">Solution</button>
+            <button id="resetSudoku" class="btn btn-secondary btn-sm">Reset</button>
+        </div>
+        <div id="sudokuMessage" style="margin-top: 10px; font-size: 0.9em; min-height: 20px;"></div>
+    `;
+    
+    document.body.appendChild(gameContainer);
+    
+    // Store the puzzle and solution data
+    gameContainer.sudokuPuzzle = sudokuPuzzle;
+    gameContainer.sudokuSolution = sudokuSolution;
+    
+    // Generate the initial grid
+    generateSudokuGrid(sudokuPuzzle);
+    
+    // Add event listeners
+    document.getElementById('closeSudoku').addEventListener('click', closeSudokuGame);
+    document.getElementById('checkSudoku').addEventListener('click', checkSudokuSolution);
+    document.getElementById('hintSudoku').addEventListener('click', giveHint);
+    document.getElementById('showSolution').addEventListener('click', showSolution);
+    document.getElementById('resetSudoku').addEventListener('click', resetPuzzle);
+    
+    // Apply dark mode if active
+    applySudokuDarkMode();
+}
+
+function generateSudokuGrid(puzzle) {
+    const grid = document.getElementById('sudokuGrid');
+    let gridHTML = '';
+    
+    for (let row = 0; row < 9; row++) {
+        gridHTML += '<div style="display: flex;">';
+        for (let col = 0; col < 9; col++) {
+            const value = puzzle[row][col];
+            const isGiven = value !== 0;
+            const borderStyle = getBorderStyle(row, col);
+            
+            gridHTML += `
+                <input type="text" 
+                       class="sudoku-cell" 
+                       data-row="${row}" 
+                       data-col="${col}"
+                       value="${isGiven ? value : ''}"
+                       ${isGiven ? 'readonly data-original="true"' : 'data-original="false"'}
+                       maxlength="1"
+                       style="
+                           width: 35px; 
+                           height: 35px; 
+                           text-align: center; 
+                           border: 1px solid #666;
+                           ${borderStyle}
+                           font-size: 1.1em;
+                           font-weight: ${isGiven ? 'bold' : 'normal'};
+                           background: ${isGiven ? '#e9ecef' : 'white'};
+                           color: ${isGiven ? '#495057' : '#000'};
+                       ">
+            `;
+        }
+        gridHTML += '</div>';
+    }
+    
+    grid.innerHTML = gridHTML;
+    
+    // Add input validation
+    document.querySelectorAll('.sudoku-cell').forEach(cell => {
+        if (!cell.readOnly) {
+            cell.addEventListener('input', function(e) {
+                const value = e.target.value;
+                if (value && (isNaN(value) || value < 1 || value > 9)) {
+                    e.target.value = '';
+                }
+                // Remove solution styling when user types
+                if (cell.classList.contains('solution-cell')) {
+                    cell.classList.remove('solution-cell');
+                    applyCellStyle(cell, false, false);
+                }
+            });
+        }
+    });
+}
+
+function getBorderStyle(row, col) {
+    let style = '';
+    if (row % 3 === 0 && row !== 0) style += 'border-top: 3px solid #333 !important;';
+    if (col % 3 === 0 && col !== 0) style += 'border-left: 3px solid #333 !important;';
+    return style;
+}
+
+function applyCellStyle(cell, isGiven, isSolution) {
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    
+    if (isGiven) {
+        cell.style.background = isDark ? '#495057' : '#e9ecef';
+        cell.style.color = isDark ? '#adb5bd' : '#495057';
+    } else if (isSolution) {
+        cell.style.background = isDark ? '#1e3a5f' : '#d1ecf1';
+        cell.style.color = isDark ? '#9ec5fe' : '#0c5460';
+    } else {
+        cell.style.background = isDark ? '#343a40' : 'white';
+        cell.style.color = isDark ? 'white' : '#000';
+    }
+}
+
+function showSolution() {
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    const solution = gameContainer.sudokuSolution;
+    const messageDiv = document.getElementById('sudokuMessage');
+    
+    const confirmShow = confirm('Show the complete solution? This will reveal all answers.');
+    if (!confirmShow) return;
+    
+    document.querySelectorAll('.sudoku-cell').forEach(cell => {
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        const isOriginal = cell.dataset.original === 'true';
+        
+        if (!isOriginal) {
+            cell.value = solution[row][col];
+            cell.classList.add('solution-cell');
+            applyCellStyle(cell, false, true);
+            cell.readOnly = true;
+        }
+    });
+    
+    messageDiv.innerHTML = `<span style="color: #17a2b8;">📝 Solution revealed!</span>`;
+    setTimeout(() => celebrateSolution(), 500);
+}
+
+function resetPuzzle() {
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    const originalPuzzle = gameContainer.sudokuPuzzle;
+    const messageDiv = document.getElementById('sudokuMessage');
+    
+    const confirmReset = confirm('Reset puzzle? This will clear all your progress.');
+    if (!confirmReset) return;
+    
+    messageDiv.innerHTML = '';
+    generateSudokuGrid(originalPuzzle);
+    applySudokuDarkMode();
+    
+    setTimeout(() => {
+        messageDiv.innerHTML = `<span style="color: #6c757d;">🔄 Puzzle reset!</span>`;
+    }, 100);
+}
+
+function checkSudokuSolution() {
+    const cells = document.querySelectorAll('.sudoku-cell');
+    const messageDiv = document.getElementById('sudokuMessage');
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    const solution = gameContainer.sudokuSolution;
+    
+    let filledCells = 0;
+    let correctCells = 0;
+    
+    cells.forEach(cell => {
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        const cellValue = parseInt(cell.value);
+        const correctValue = solution[row][col];
+        
+        if (cell.value) {
+            filledCells++;
+            if (cellValue === correctValue) {
+                correctCells++;
+                cell.style.borderColor = '#28a745';
+            } else {
+                cell.style.borderColor = '#dc3545';
+                cell.style.background = '#f8d7da';
+            }
+        }
+    });
+    
+    if (filledCells === 0) {
+        messageDiv.innerHTML = `<span style="color: #6c757d;">🎯 Start filling in numbers!</span>`;
+    } else if (filledCells < 81) {
+        const accuracy = Math.round((correctCells / filledCells) * 100);
+        messageDiv.innerHTML = `<span style="color: #ffc107;">🔍 ${filledCells}/81 cells (${accuracy}% correct)</span>`;
+    } else if (correctCells === 81) {
+        messageDiv.innerHTML = `<span style="color: #28a745;">🎉 Perfect! You solved it!</span>`;
+        celebrateSolution();
+    } else {
+        messageDiv.innerHTML = `<span style="color: #dc3545;">❌ Some answers are wrong!</span>`;
+    }
+    
+    // Reset styling after 3 seconds
+    setTimeout(() => {
+        cells.forEach(cell => {
+            cell.style.borderColor = '#666';
+            if (!cell.readOnly && !cell.classList.contains('solution-cell')) {
+                applyCellStyle(cell, false, false);
+            }
+            
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            if (row % 3 === 0 && row !== 0) cell.style.borderTop = '3px solid #333';
+            if (col % 3 === 0 && col !== 0) cell.style.borderLeft = '3px solid #333';
+        });
+    }, 3000);
+}
+
+function giveHint() {
+    const emptyCells = Array.from(document.querySelectorAll('.sudoku-cell'))
+        .filter(cell => !cell.value && cell.dataset.original === 'false');
+    const messageDiv = document.getElementById('sudokuMessage');
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    const solution = gameContainer.sudokuSolution;
+    
+    if (emptyCells.length === 0) {
+        messageDiv.innerHTML = `<span style="color: #17a2b8;">💡 All cells filled!</span>`;
+        return;
+    }
+    
+    const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const row = parseInt(randomCell.dataset.row);
+    const col = parseInt(randomCell.dataset.col);
+    const hintValue = solution[row][col];
+    
+    // Show hint temporarily
+    randomCell.style.background = '#fff3cd';
+    randomCell.style.border = '2px solid #ffc107';
+    randomCell.value = hintValue;
+    randomCell.style.color = '#856404';
+    randomCell.style.fontWeight = 'bold';
+    
+    messageDiv.innerHTML = `<span style="color: #ffc107;">💡 Hint: ${hintValue} at row ${row + 1}, column ${col + 1}</span>`;
+    
+    // Make permanent after 2 seconds
+    setTimeout(() => {
+        randomCell.style.background = '#e2e6ea';
+        randomCell.style.border = '1px solid #666';
+        randomCell.style.color = '#495057';
+        randomCell.readOnly = true;
+        randomCell.dataset.original = 'true';
+        
+        if (row % 3 === 0 && row !== 0) randomCell.style.borderTop = '3px solid #333';
+        if (col % 3 === 0 && col !== 0) randomCell.style.borderLeft = '3px solid #333';
+        
+        messageDiv.innerHTML = `<span style="color: #6c757d;">💡 Hint added!</span>`;
+    }, 2000);
+}
+
+function celebrateSolution() {
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    
+    for (let i = 0; i < 20; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.style.cssText = `
+                position: absolute;
+                top: -10px;
+                left: ${Math.random() * 100}%;
+                width: 8px;
+                height: 8px;
+                background: ${['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b'][Math.floor(Math.random() * 5)]};
+                border-radius: 50%;
+                animation: confettiFall 2s ease-out forwards;
+                pointer-events: none;
+            `;
+            
+            gameContainer.appendChild(confetti);
+            setTimeout(() => confetti.remove(), 2000);
+        }, i * 100);
+    }
+}
+
+function closeSudokuGame() {
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    if (gameContainer) {
+        gameContainer.style.animation = 'fadeOut 0.3s ease-in';
+        setTimeout(() => gameContainer.remove(), 300);
+    }
+}
+
+function applySudokuDarkMode() {
+    const gameContainer = document.getElementById('sudokuGameContainer');
+    if (!gameContainer) return;
+    
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    
+    if (isDark) {
+        gameContainer.style.background = '#343a40';
+        gameContainer.style.color = 'white';
+        gameContainer.style.borderColor = '#6c757d';
+        
+        const grid = document.getElementById('sudokuGrid');
+        if (grid) grid.style.background = '#495057';
+        
+        document.querySelectorAll('.sudoku-cell').forEach(cell => {
+            const isOriginal = cell.dataset.original === 'true';
+            const isSolution = cell.classList.contains('solution-cell');
+            applyCellStyle(cell, isOriginal, isSolution);
+        });
+    }
+}
+
 
 function openNewsletterPopup() {
     if (subscriberInfo) {
