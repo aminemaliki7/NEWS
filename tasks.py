@@ -83,7 +83,7 @@ def generate_tts_task(text, voice_id, speed=1.0, depth=1, task_id=None):
         # Cache result in Redis
         if task_id:
             cache_key = f"tts:{task_id}"
-            redis_client.setex(cache_key, 86400, json.dumps(result_data))
+            redis_client.setex(cache_key, 21600, json.dumps(result_data))
         
         return result_data
         
@@ -110,7 +110,7 @@ def fetch_article_content_task(url):
         content = gnews_client.fetch_article_content(url)
         
         # Cache for 1 hour
-        redis_client.setex(cache_key, 86400, json.dumps(content))
+        redis_client.setex(cache_key, 21600, json.dumps(content))
         
         return content
         
@@ -130,7 +130,7 @@ def cache_news_task(category='general', language='en'):
         results = gnews_client.get_top_headlines(category=category, language=language)
         
         # Cache for 15 minutes
-        redis_client.setex(cache_key, 86400, json.dumps(results))
+        redis_client.setex(cache_key, 21600, json.dumps(results))
         
         return {
             'status': 'cached',
