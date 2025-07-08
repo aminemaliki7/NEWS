@@ -863,17 +863,34 @@ async function listenToSummary(index, autoPlay = true) {
 
     const langCode = selectedVoice.split('-')[0];
 
-    // Use description directly from GNews API
-    const description = article.description || article.title || '';
+    // UPDATED: Combine title and description
+    const title = article.title || '';
+    const description = article.description || '';
+    
+    // Create combined text with title first, then description
+    let combinedText = '';
+    if (title && description) {
+        // Both title and description exist
+        combinedText = `${title}. ${description}`;
+    } else if (title) {
+        // Only title exists
+        combinedText = title;
+    } else if (description) {
+        // Only description exists
+        combinedText = description;
+    } else {
+        // Neither exists
+        combinedText = '';
+    }
 
-    if (!description.trim()) {
+    if (!combinedText.trim()) {
         alert(t.noText);
         resetAudioUI(listenBtn, loadingUI, progressBar);
         return;
     }
 
     try {
-        let summaryText = description;
+        let summaryText = combinedText;
 
         // Translate if needed (only if not English)
         if (langCode !== 'en') {
