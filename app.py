@@ -373,7 +373,7 @@ def submit_feedback():
 @app.route('/api/article-comment', methods=['POST'])
 @rate_limit('api_comments')
 def post_comment():
-    """SECURED comment posting"""
+    """SECURED comment posting with subscriber integration"""
     try:
         data = request.json
         article_id = data.get('article_id')
@@ -391,36 +391,55 @@ def post_comment():
         comment_text = sanitize_html_input(comment_text)
         article_id = sanitize_html_input(article_id)
         
-        # Validate article_id format
-        if not re.match(r'^[a-zA-Z0-9_-]+$', article_id):
-            return jsonify({"error": "Invalid request"}), 400
-
-        # Generate nickname if not provided
-        if not nickname:
-            import random
-            random_names = ["Anonymous", "Reader", "Observer", "Visitor", "User"]
-            nickname = random.choice(random_names) + str(random.randint(100, 999))
+        # Check if user is subscribed
+        is_subscriber = session.get('is_subscribed', False)
+        subscriber_id = session.get('subscriber_id')
+        subscriber_name = session.get('subscriber_name')
+        
+        if is_subscriber and subscriber_id:
+            # Use subscriber name
+            display_name = subscriber_name
+            # Update subscriber comment count
+            try:
+                subscriber_ref = db.collection('newsletter_subscribers').document(subscriber_id)
+                subscriber_ref.update({
+                    'total_comments': firestore.Increment(1)
+                })
+            except Exception as e:
+                if app.debug:
+                    app.logger.warning(f"Failed to update subscriber stats: {e}")
         else:
-            nickname = sanitize_html_input(nickname[:50])
+            # Use provided nickname or generate one
+            if not nickname:
+                import random
+                random_names = ["Anonymous", "Reader", "Observer", "Visitor", "User"]
+                display_name = random.choice(random_names) + str(random.randint(100, 999))
+            else:
+                display_name = sanitize_html_input(nickname[:50])
 
         # Save comment
         doc_ref = db.collection('comments').document(article_id).collection('comments').document()
         comment_data = {
-            'nickname': nickname,
+            'nickname': display_name,
             'comment': comment_text,
             'timestamp': firestore.SERVER_TIMESTAMP,
             'likes': 0,
-            'liked_by': []
+            'liked_by': [],
+            'is_subscriber': is_subscriber,
+            'subscriber_id': subscriber_id if is_subscriber else None
         }
         doc_ref.set(comment_data)
 
-        return jsonify({"message": "Comment posted", "nickname": nickname})
+        return jsonify({
+            "message": "Comment posted", 
+            "nickname": display_name,
+            "is_subscriber": is_subscriber
+        })
     
     except Exception as e:
         if app.debug:
             app.logger.error(f"Error posting comment: {str(e)}")
         return jsonify({"error": "Failed to post comment"}), 500
-
 def get_user_id():
     """Generate consistent user ID for voting"""
     user_ip = request.environ.get('REMOTE_ADDR', 'unknown')
@@ -532,7 +551,7 @@ def handle_comment_like():
 @app.route('/api/article-like', methods=['POST'])
 @rate_limit('api_comments')
 def handle_article_like():
-    """Handle article likes"""
+    """Handle article likes with subscriber integration"""
     try:
         data = request.get_json()
         article_id = data.get('article_id')
@@ -542,6 +561,10 @@ def handle_article_like():
         
         user_id = get_user_id()
         article_ref = db.collection('article_likes').document(article_id)
+        
+        # Check subscriber status
+        is_subscriber = session.get('is_subscribed', False)
+        subscriber_id = session.get('subscriber_id')
         
         @firestore.transactional
         def update_article_like(transaction):
@@ -565,17 +588,30 @@ def handle_article_like():
                 liked_by.remove(user_id)
                 current_likes = max(0, current_likes - 1)
                 new_user_liked = False
+                like_delta = -1
             else:
                 if user_id not in liked_by:
                     liked_by.append(user_id)
                 current_likes += 1
                 new_user_liked = True
+                like_delta = 1
             
             transaction.set(article_ref, {
                 'likes': current_likes,
                 'liked_by': liked_by,
                 'updated_at': firestore.SERVER_TIMESTAMP
             })
+            
+            # Update subscriber stats if applicable
+            if is_subscriber and subscriber_id and like_delta != 0:
+                try:
+                    subscriber_ref = db.collection('newsletter_subscribers').document(subscriber_id)
+                    transaction.update(subscriber_ref, {
+                        'total_likes': firestore.Increment(like_delta)
+                    })
+                except Exception as e:
+                    if app.debug:
+                        app.logger.warning(f"Failed to update subscriber like count: {e}")
             
             return {
                 'likes': current_likes,
@@ -594,7 +630,6 @@ def handle_article_like():
         if app.debug:
             app.logger.error(f"Error handling article like: {str(e)}")
         return jsonify({'error': 'Service error'}), 500
-
 @app.route('/api/article-likes', methods=['GET'])
 @rate_limit('api_general')
 def get_article_likes():
@@ -1122,50 +1157,97 @@ def newsletter_subscribe():
     """Newsletter subscription"""
     data = request.get_json()
     email = data.get('email', '').strip().lower()
+    name = data.get('name', '').strip()
     categories = data.get('categories', [])
 
     if not email or '@' not in email:
         return jsonify({'error': 'Invalid email address'}), 400
+    
+    if not name or len(name.strip()) < 2:
+        return jsonify({'error': 'Please provide your full name'}), 400
 
     try:
-        db.collection('newsletter_subscribers').add({
+        # Create subscriber document
+        subscriber_ref = db.collection('newsletter_subscribers').add({
             'email': email,
+            'name': name,
             'categories': categories,
-            'timestamp': firestore.SERVER_TIMESTAMP
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'total_likes': 0,
+            'total_comments': 0,
+            'is_active': True
         })
-        return jsonify({'message': 'Subscription successful!'})
+        
+        # Store subscriber info in session
+        session['subscriber_id'] = subscriber_ref[1].id
+        session['subscriber_name'] = name
+        session['subscriber_email'] = email
+        session['is_subscribed'] = True
+        
+        return jsonify({
+            'message': 'Subscription successful!',
+            'subscriber_name': name,
+            'subscriber_email': email,
+            'success': True
+        })
     except Exception as e:
         if app.debug:
             app.logger.error(f'Newsletter subscription error: {e}')
         return jsonify({'error': 'Subscription failed'}), 500
-
-@app.route('/stream-temp-audio/<path:path>')
-def stream_temp_audio(path):
-    """Stream temporary audio files"""
-    audio_path = os.path.join(app.config['OUTPUT_FOLDER'], path)
-    
-    if not os.path.exists(audio_path):
-        if app.debug:
-            app.logger.error(f"Audio file not found: {audio_path}")
-        return jsonify({"error": "Audio file not found"}), 404
-    
+@app.route('/api/subscriber-status', methods=['GET'])
+@rate_limit('api_general')
+def get_subscriber_status():
+    """Get current subscriber status"""
     try:
-        file_size = os.path.getsize(audio_path)
-        if file_size == 0:
-            if app.debug:
-                app.logger.error(f"Audio file is empty: {audio_path}")
-            return jsonify({"error": "Audio file is empty"}), 404
-    except OSError as e:
-        if app.debug:
-            app.logger.error(f"Error checking file size: {e}")
-        return jsonify({"error": "Error accessing file"}), 500
-    
-    try:
-        return send_file(audio_path, mimetype="audio/mpeg")
+        if session.get('is_subscribed') and session.get('subscriber_id'):
+            # Verify subscriber still exists in database
+            subscriber_ref = db.collection('newsletter_subscribers').document(session['subscriber_id'])
+            subscriber_doc = subscriber_ref.get()
+            
+            if subscriber_doc.exists:
+                subscriber_data = subscriber_doc.to_dict()
+                return jsonify({
+                    'subscribed': True,
+                    'name': subscriber_data.get('name', session.get('subscriber_name')),
+                    'email': subscriber_data.get('email', session.get('subscriber_email')),
+                    'total_likes': subscriber_data.get('total_likes', 0),
+                    'total_comments': subscriber_data.get('total_comments', 0)
+                })
+        
+        return jsonify({'subscribed': False})
+        
     except Exception as e:
         if app.debug:
-            app.logger.error(f"Error serving audio file: {e}")
-        return jsonify({"error": "Error serving file"}), 500
+            app.logger.error(f'Error getting subscriber status: {e}')
+        return jsonify({'subscribed': False})
+@app.route('/api/newsletter-unsubscribe', methods=['POST'])
+@rate_limit('api_general')
+def newsletter_unsubscribe():
+    """Unsubscribe from newsletter"""
+    try:
+        if session.get('subscriber_id'):
+            # Mark as inactive instead of deleting
+            subscriber_ref = db.collection('newsletter_subscribers').document(session['subscriber_id'])
+            subscriber_ref.update({
+                'is_active': False,
+                'unsubscribed_at': firestore.SERVER_TIMESTAMP
+            })
+        
+        # Clear session
+        session.pop('subscriber_id', None)
+        session.pop('subscriber_name', None)
+        session.pop('subscriber_email', None)
+        session.pop('is_subscribed', None)
+        
+        return jsonify({
+            'message': 'Successfully unsubscribed',
+            'success': True
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f'Unsubscribe error: {e}')
+        return jsonify({'error': 'Failed to unsubscribe'}), 500
 
 @app.route('/api/rate-limit/status')
 @conditional_rate_limit('api_general')

@@ -784,6 +784,7 @@ async function unsubscribeFromNewsletter() {
             // Reset subscriber info
             subscriberInfo = null;
             updateThemeControlsWithSubscriber();
+            updateCommentFormsForSubscriber();
             
         } else {
             alert('Failed to unsubscribe: ' + (data.error || 'Unknown error'));
@@ -844,15 +845,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.error) {
                     alert('Subscription failed: ' + data.error);
                 } else {
+                    // SUCCESS: Show proper message with name
                     alert(`Thank you ${data.subscriber_name}! You're now subscribed to our newsletter. 📬\n\nYour likes and comments will now be tracked with your name!`);
+                    
+                    // Close modal
                     const modal = bootstrap.Modal.getInstance(document.getElementById('newsletterModal'));
                     modal.hide();
                     form.reset();
                     
-                    // Reload subscriber status
-                    if (typeof loadSubscriberStatus === 'function') {
-                        loadSubscriberStatus();
-                    }
+                    // IMPORTANT: Reload subscriber status to update UI
+                    loadSubscriberStatus().then(() => {
+                        console.log('Subscriber status updated after newsletter subscription');
+                        // Update comment forms for the new subscriber
+                        updateCommentFormsForSubscriber();
+                    });
                 }
             })
             .catch(err => {
@@ -867,7 +873,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
 function toggleTheme() {
     darkMode = !darkMode;
     localStorage.setItem('darkMode', darkMode.toString());
@@ -2916,7 +2921,7 @@ async function loadSubscriberStatus() {
         // Update theme controls to show subscriber status
         updateThemeControlsWithSubscriber();
         
-        // UPDATE: Also update comment forms
+        // Update comment forms for subscriber status
         updateCommentFormsForSubscriber();
         
     } catch (error) {
