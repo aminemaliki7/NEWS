@@ -28,6 +28,9 @@ from functools import wraps
 from typing import Dict, Optional
 import html
 import re
+from datetime import datetime, timedelta
+from collections import defaultdict
+import calendar
 
 # Load environment variables first
 load_dotenv()
@@ -129,6 +132,48 @@ def add_security_headers(response):
 # ============================================
 # INPUT VALIDATION & SANITIZATION
 # ============================================
+def calculate_date_ranges():
+    """Calculate various date ranges for analytics"""
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    
+    # Yesterday
+    yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    # Last 7 days
+    week_start = (now - timedelta(days=6)).strftime('%Y-%m-%d')
+    
+    # Last 30 days
+    month_start = (now - timedelta(days=29)).strftime('%Y-%m-%d')
+    
+    # Current month
+    current_month_start = now.replace(day=1).strftime('%Y-%m-%d')
+    
+    # Last month
+    last_month_end = (now.replace(day=1) - timedelta(days=1))
+    last_month_start = last_month_end.replace(day=1).strftime('%Y-%m-%d')
+    last_month_end = last_month_end.strftime('%Y-%m-%d')
+    
+    # Current year
+    current_year_start = now.replace(month=1, day=1).strftime('%Y-%m-%d')
+    
+    # Last year
+    last_year = now.year - 1
+    last_year_start = f"{last_year}-01-01"
+    last_year_end = f"{last_year}-12-31"
+    
+    return {
+        'today': today,
+        'yesterday': yesterday,
+        'week_start': week_start,
+        'month_start': month_start,
+        'current_month_start': current_month_start,
+        'last_month_start': last_month_start,
+        'last_month_end': last_month_end,
+        'current_year_start': current_year_start,
+        'last_year_start': last_year_start,
+        'last_year_end': last_year_end
+    }
 
 def sanitize_html_input(text: str) -> str:
     """Sanitize HTML input to prevent XSS"""
@@ -1340,6 +1385,535 @@ def cleanup_old_files():
         except Exception as e:
             if app.debug:
                 app.logger.error(f"Error during cleanup: {e}")
+
+@app.route('/api/track-visit', methods=['POST'])
+@rate_limit('api_general')
+def track_user_visit():
+    """Track unique user visits"""
+    try:
+        # Get client identification
+        client_id = get_client_id()
+        user_ip = request.environ.get('REMOTE_ADDR', 'unknown')
+        user_agent = request.headers.get('User-Agent', '')
+        referer = request.headers.get('Referer', '')
+        
+        # Get page_url from request body
+        data = request.get_json() or {}
+        page_url = sanitize_html_input(data.get('page_url', ''))
+
+        # Validate page_url
+        if not page_url:
+            return jsonify({'error': 'No page_url provided'}), 400
+
+        # Create unique visitor ID based on IP and User Agent hash
+        visitor_hash = hashlib.sha256(f"{user_ip}:{user_agent}".encode()).hexdigest()
+        
+        # Check if this visitor has been seen today
+        today = datetime.now().strftime('%Y-%m-%d')
+        visit_key = f"{visitor_hash}_{today}"
+        
+        # Try to get existing visit record for today
+        visit_ref = db.collection('user_visits').document(visit_key)
+        visit_doc = visit_ref.get()
+        
+        if visit_doc.exists:
+            # Update existing visit - increment page views
+            visit_ref.update({
+                'page_views': firestore.Increment(1),
+                'last_seen': firestore.SERVER_TIMESTAMP,
+                'last_page': page_url
+            })
+            
+            return jsonify({
+                'status': 'updated',
+                'visitor_id': visitor_hash[:8],
+                'returning_visitor': True
+            })
+        else:
+            # Create new visit record
+            visit_data = {
+                'visitor_id': visitor_hash,
+                'ip_address': user_ip,
+                'user_agent': user_agent[:200],  # Limit length
+                'first_visit': firestore.SERVER_TIMESTAMP,
+                'last_seen': firestore.SERVER_TIMESTAMP,
+                'page_views': 1,
+                'date': today,
+                'referer': referer[:200] if referer else '',
+                'first_page': page_url,
+                'last_page': page_url,
+                'is_unique_today': True
+            }
+            
+            visit_ref.set(visit_data)
+            
+            # Also update daily stats
+            stats_ref = db.collection('daily_stats').document(today)
+            stats_ref.set({
+                'date': today,
+                'unique_visitors': firestore.Increment(1),
+                'total_page_views': firestore.Increment(1),
+                'last_updated': firestore.SERVER_TIMESTAMP
+            }, merge=True)
+            
+            return jsonify({
+                'status': 'created',
+                'visitor_id': visitor_hash[:8],
+                'returning_visitor': False
+            })
+            
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error tracking visit: {str(e)}")
+        return jsonify({'error': 'Failed to track visit'}), 500
+    
+@app.route('/api/analytics/dau', methods=['GET'])
+@rate_limit('api_general')
+def get_daily_active_users():
+    """Get Daily Active Users statistics"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Get today's stats
+        today_ref = db.collection('daily_stats').document(date_ranges['today'])
+        today_doc = today_ref.get()
+        
+        today_stats = today_doc.to_dict() if today_doc.exists else {
+            'unique_visitors': 0,
+            'total_page_views': 0
+        }
+        
+        # Get yesterday's stats for comparison
+        yesterday_ref = db.collection('daily_stats').document(date_ranges['yesterday'])
+        yesterday_doc = yesterday_ref.get()
+        
+        yesterday_stats = yesterday_doc.to_dict() if yesterday_doc.exists else {
+            'unique_visitors': 0,
+            'total_page_views': 0
+        }
+        
+        # Calculate change
+        today_dau = today_stats.get('unique_visitors', 0)
+        yesterday_dau = yesterday_stats.get('unique_visitors', 0)
+        
+        if yesterday_dau > 0:
+            change_percentage = ((today_dau - yesterday_dau) / yesterday_dau) * 100
+        else:
+            change_percentage = 100 if today_dau > 0 else 0
+        
+        return jsonify({
+            'dau': {
+                'today': today_dau,
+                'yesterday': yesterday_dau,
+                'change_percentage': round(change_percentage, 2),
+                'change_direction': 'up' if change_percentage > 0 else 'down' if change_percentage < 0 else 'same'
+            },
+            'page_views': {
+                'today': today_stats.get('total_page_views', 0),
+                'yesterday': yesterday_stats.get('total_page_views', 0)
+            },
+            'date': date_ranges['today']
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting DAU: {str(e)}")
+        return jsonify({'error': 'Failed to get DAU statistics'}), 500
+
+@app.route('/api/analytics/weekly', methods=['GET'])
+@rate_limit('api_general')
+def get_weekly_stats():
+    """Get weekly statistics (last 7 days)"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Query daily stats for last 7 days
+        daily_stats_ref = db.collection('daily_stats')
+        query = daily_stats_ref.where('date', '>=', date_ranges['week_start']).where('date', '<=', date_ranges['today'])
+        docs = query.stream()
+        
+        daily_data = []
+        total_unique_visitors = 0
+        total_page_views = 0
+        unique_visitors_set = set()
+        
+        for doc in docs:
+            data = doc.to_dict()
+            daily_data.append({
+                'date': data.get('date'),
+                'unique_visitors': data.get('unique_visitors', 0),
+                'total_page_views': data.get('total_page_views', 0)
+            })
+            total_page_views += data.get('total_page_views', 0)
+        
+        # Get unique visitors for the week from user_visits
+        current_date = datetime.strptime(date_ranges['week_start'], '%Y-%m-%d')
+        end_date = datetime.strptime(date_ranges['today'], '%Y-%m-%d')
+        
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            
+            # Query user visits for this date
+            visits_ref = db.collection('user_visits')
+            visits_query = visits_ref.where('date', '==', date_str)
+            visits_docs = visits_query.stream()
+            
+            for visit_doc in visits_docs:
+                visit_data = visit_doc.to_dict()
+                unique_visitors_set.add(visit_data.get('visitor_id'))
+            
+            current_date += timedelta(days=1)
+        
+        # Sort daily data by date
+        daily_data.sort(key=lambda x: x['date'])
+        
+        return jsonify({
+            'period': 'last_7_days',
+            'start_date': date_ranges['week_start'],
+            'end_date': date_ranges['today'],
+            'summary': {
+                'total_unique_visitors': len(unique_visitors_set),
+                'total_page_views': total_page_views,
+                'average_daily_visitors': round(len(unique_visitors_set) / 7, 2),
+                'average_daily_page_views': round(total_page_views / 7, 2)
+            },
+            'daily_breakdown': daily_data
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting weekly stats: {str(e)}")
+        return jsonify({'error': 'Failed to get weekly statistics'}), 500
+
+@app.route('/api/analytics/monthly', methods=['GET'])
+@rate_limit('api_general')
+def get_monthly_stats():
+    """Get monthly statistics (last 30 days)"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Query daily stats for last 30 days
+        daily_stats_ref = db.collection('daily_stats')
+        query = daily_stats_ref.where('date', '>=', date_ranges['month_start']).where('date', '<=', date_ranges['today'])
+        docs = query.stream()
+        
+        total_page_views = 0
+        unique_visitors_set = set()
+        weekly_breakdown = defaultdict(lambda: {'visitors': set(), 'page_views': 0})
+        
+        for doc in docs:
+            data = doc.to_dict()
+            total_page_views += data.get('total_page_views', 0)
+            
+            # Calculate week number for breakdown
+            date_obj = datetime.strptime(data.get('date'), '%Y-%m-%d')
+            week_start = (date_obj - timedelta(days=date_obj.weekday())).strftime('%Y-%m-%d')
+            weekly_breakdown[week_start]['page_views'] += data.get('total_page_views', 0)
+        
+        # Get unique visitors for the month
+        current_date = datetime.strptime(date_ranges['month_start'], '%Y-%m-%d')
+        end_date = datetime.strptime(date_ranges['today'], '%Y-%m-%d')
+        
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            week_start = (current_date - timedelta(days=current_date.weekday())).strftime('%Y-%m-%d')
+            
+            # Query user visits for this date
+            visits_ref = db.collection('user_visits')
+            visits_query = visits_ref.where('date', '==', date_str)
+            visits_docs = visits_query.stream()
+            
+            for visit_doc in visits_docs:
+                visit_data = visit_doc.to_dict()
+                visitor_id = visit_data.get('visitor_id')
+                unique_visitors_set.add(visitor_id)
+                weekly_breakdown[week_start]['visitors'].add(visitor_id)
+            
+            current_date += timedelta(days=1)
+        
+        # Convert weekly breakdown
+        weekly_data = []
+        for week_start, data in weekly_breakdown.items():
+            weekly_data.append({
+                'week_start': week_start,
+                'unique_visitors': len(data['visitors']),
+                'page_views': data['page_views']
+            })
+        
+        weekly_data.sort(key=lambda x: x['week_start'])
+        
+        return jsonify({
+            'period': 'last_30_days',
+            'start_date': date_ranges['month_start'],
+            'end_date': date_ranges['today'],
+            'summary': {
+                'total_unique_visitors': len(unique_visitors_set),
+                'total_page_views': total_page_views,
+                'average_daily_visitors': round(len(unique_visitors_set) / 30, 2),
+                'average_daily_page_views': round(total_page_views / 30, 2)
+            },
+            'weekly_breakdown': weekly_data
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting monthly stats: {str(e)}")
+        return jsonify({'error': 'Failed to get monthly statistics'}), 500
+
+@app.route('/api/analytics/yearly', methods=['GET'])
+@rate_limit('api_general')
+def get_yearly_stats():
+    """Get yearly statistics"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Current year stats
+        daily_stats_ref = db.collection('daily_stats')
+        current_year_query = daily_stats_ref.where('date', '>=', date_ranges['current_year_start']).where('date', '<=', date_ranges['today'])
+        current_year_docs = current_year_query.stream()
+        
+        current_year_page_views = 0
+        current_year_visitors = set()
+        monthly_breakdown = defaultdict(lambda: {'visitors': set(), 'page_views': 0})
+        
+        for doc in current_year_docs:
+            data = doc.to_dict()
+            current_year_page_views += data.get('total_page_views', 0)
+            
+            # Group by month
+            date_obj = datetime.strptime(data.get('date'), '%Y-%m-%d')
+            month_key = date_obj.strftime('%Y-%m')
+            monthly_breakdown[month_key]['page_views'] += data.get('total_page_views', 0)
+        
+        # Get unique visitors for current year
+        visits_ref = db.collection('user_visits')
+        current_year_visits_query = visits_ref.where('date', '>=', date_ranges['current_year_start']).where('date', '<=', date_ranges['today'])
+        current_year_visits = current_year_visits_query.stream()
+        
+        for visit_doc in current_year_visits:
+            visit_data = visit_doc.to_dict()
+            visitor_id = visit_data.get('visitor_id')
+            current_year_visitors.add(visitor_id)
+            
+            # Group by month
+            date_obj = datetime.strptime(visit_data.get('date'), '%Y-%m-%d')
+            month_key = date_obj.strftime('%Y-%m')
+            monthly_breakdown[month_key]['visitors'].add(visitor_id)
+        
+        # Convert monthly breakdown
+        monthly_data = []
+        for month_key, data in monthly_breakdown.items():
+            year, month = month_key.split('-')
+            month_name = calendar.month_name[int(month)]
+            monthly_data.append({
+                'month': month_key,
+                'month_name': f"{month_name} {year}",
+                'unique_visitors': len(data['visitors']),
+                'page_views': data['page_views']
+            })
+        
+        monthly_data.sort(key=lambda x: x['month'])
+        
+        # Get last year stats for comparison
+        last_year_query = daily_stats_ref.where('date', '>=', date_ranges['last_year_start']).where('date', '<=', date_ranges['last_year_end'])
+        last_year_docs = last_year_query.stream()
+        
+        last_year_page_views = 0
+        for doc in last_year_docs:
+            data = doc.to_dict()
+            last_year_page_views += data.get('total_page_views', 0)
+        
+        # Get last year unique visitors
+        last_year_visits_query = visits_ref.where('date', '>=', date_ranges['last_year_start']).where('date', '<=', date_ranges['last_year_end'])
+        last_year_visits = last_year_visits_query.stream()
+        
+        last_year_visitors = set()
+        for visit_doc in last_year_visits:
+            visit_data = visit_doc.to_dict()
+            last_year_visitors.add(visit_data.get('visitor_id'))
+        
+        # Calculate year-over-year growth
+        current_year_unique = len(current_year_visitors)
+        last_year_unique = len(last_year_visitors)
+        
+        if last_year_unique > 0:
+            visitor_growth = ((current_year_unique - last_year_unique) / last_year_unique) * 100
+        else:
+            visitor_growth = 100 if current_year_unique > 0 else 0
+        
+        if last_year_page_views > 0:
+            pageview_growth = ((current_year_page_views - last_year_page_views) / last_year_page_views) * 100
+        else:
+            pageview_growth = 100 if current_year_page_views > 0 else 0
+        
+        return jsonify({
+            'period': 'yearly',
+            'current_year': datetime.now().year,
+            'last_year': datetime.now().year - 1,
+            'current_year_stats': {
+                'unique_visitors': current_year_unique,
+                'total_page_views': current_year_page_views,
+                'start_date': date_ranges['current_year_start'],
+                'end_date': date_ranges['today']
+            },
+            'last_year_stats': {
+                'unique_visitors': last_year_unique,
+                'total_page_views': last_year_page_views
+            },
+            'year_over_year_growth': {
+                'visitors_growth_percentage': round(visitor_growth, 2),
+                'pageviews_growth_percentage': round(pageview_growth, 2)
+            },
+            'monthly_breakdown': monthly_data
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting yearly stats: {str(e)}")
+        return jsonify({'error': 'Failed to get yearly statistics'}), 500
+
+@app.route('/api/analytics/summary', methods=['GET'])
+@rate_limit('api_general')
+def get_analytics_summary():
+    """Get comprehensive analytics summary"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Get all-time stats
+        visits_ref = db.collection('user_visits')
+        all_visits = visits_ref.stream()
+        
+        all_time_visitors = set()
+        all_time_page_views = 0
+        first_visit_date = None
+        last_visit_date = None
+        
+        for visit_doc in all_visits:
+            visit_data = visit_doc.to_dict()
+            all_time_visitors.add(visit_data.get('visitor_id'))
+            all_time_page_views += visit_data.get('page_views', 1)
+            
+            visit_date = visit_data.get('date')
+            if visit_date:
+                if not first_visit_date or visit_date < first_visit_date:
+                    first_visit_date = visit_date
+                if not last_visit_date or visit_date > last_visit_date:
+                    last_visit_date = visit_date
+        
+        # Get today's stats
+        today_ref = db.collection('daily_stats').document(date_ranges['today'])
+        today_doc = today_ref.get()
+        today_stats = today_doc.to_dict() if today_doc.exists else {'unique_visitors': 0, 'total_page_views': 0}
+        
+        # Calculate average daily stats
+        if first_visit_date and last_visit_date:
+            days_active = (datetime.strptime(last_visit_date, '%Y-%m-%d') - 
+                          datetime.strptime(first_visit_date, '%Y-%m-%d')).days + 1
+            avg_daily_visitors = len(all_time_visitors) / days_active if days_active > 0 else 0
+            avg_daily_page_views = all_time_page_views / days_active if days_active > 0 else 0
+        else:
+            days_active = 0
+            avg_daily_visitors = 0
+            avg_daily_page_views = 0
+        
+        return jsonify({
+            'summary': {
+                'all_time': {
+                    'total_unique_visitors': len(all_time_visitors),
+                    'total_page_views': all_time_page_views,
+                    'first_visit_date': first_visit_date,
+                    'last_visit_date': last_visit_date,
+                    'days_active': days_active,
+                    'average_daily_visitors': round(avg_daily_visitors, 2),
+                    'average_daily_page_views': round(avg_daily_page_views, 2)
+                },
+                'today': {
+                    'unique_visitors': today_stats.get('unique_visitors', 0),
+                    'page_views': today_stats.get('total_page_views', 0),
+                    'date': date_ranges['today']
+                }
+            },
+            'quick_stats': {
+                'total_unique_visitors': len(all_time_visitors),
+                'total_page_views': all_time_page_views,
+                'today_visitors': today_stats.get('unique_visitors', 0),
+                'today_page_views': today_stats.get('total_page_views', 0)
+            }
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting analytics summary: {str(e)}")
+        return jsonify({'error': 'Failed to get analytics summary'}), 500
+
+@app.route('/api/analytics/dashboard', methods=['GET'])
+@rate_limit('api_general')
+def get_analytics_dashboard():
+    """Get complete analytics dashboard data"""
+    try:
+        # Get data from all other endpoints
+        import requests
+        base_url = request.host_url.rstrip('/')
+        
+        # This is a simplified version - in production you'd call the functions directly
+        # rather than making HTTP requests to avoid circular calls
+        
+        from datetime import datetime, timedelta
+        
+        date_ranges = calculate_date_ranges()
+        
+        # Get basic stats
+        visits_ref = db.collection('user_visits')
+        today_visits = visits_ref.where('date', '==', date_ranges['today']).stream()
+        
+        today_unique_visitors = set()
+        today_page_views = 0
+        
+        for visit in today_visits:
+            visit_data = visit.to_dict()
+            today_unique_visitors.add(visit_data.get('visitor_id'))
+            today_page_views += visit_data.get('page_views', 1)
+        
+        # Get last 7 days trend
+        last_7_days = []
+        for i in range(6, -1, -1):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            day_visits = visits_ref.where('date', '==', date).stream()
+            
+            day_visitors = set()
+            day_page_views = 0
+            
+            for visit in day_visits:
+                visit_data = visit.to_dict()
+                day_visitors.add(visit_data.get('visitor_id'))
+                day_page_views += visit_data.get('page_views', 1)
+            
+            last_7_days.append({
+                'date': date,
+                'visitors': len(day_visitors),
+                'page_views': day_page_views
+            })
+        
+        return jsonify({
+            'dashboard': {
+                'today': {
+                    'unique_visitors': len(today_unique_visitors),
+                    'page_views': today_page_views,
+                    'date': date_ranges['today']
+                },
+                'last_7_days_trend': last_7_days,
+                'quick_metrics': {
+                    'dau': len(today_unique_visitors),
+                    'total_page_views_today': today_page_views,
+                    'avg_page_views_per_visitor': round(today_page_views / len(today_unique_visitors), 2) if len(today_unique_visitors) > 0 else 0
+                }
+            }
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting dashboard data: {str(e)}")
+        return jsonify({'error': 'Failed to get dashboard data'}), 500
 
 # ============================================
 # APPLICATION STARTUP

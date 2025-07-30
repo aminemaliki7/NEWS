@@ -62,6 +62,14 @@ services:
         sync: false
       - key: GNEWS_API_KEY_5
         sync: false
+      - key: GNEWS_API_KEY_6
+        sync: false
+      - key: GNEWS_API_KEY_7
+        sync: false
+      - key: GNEWS_API_KEY_8
+        sync: false
+      - key: GNEWS_API_KEY_9
+        sync: false        
 
   - type: redis
     name: news-redis
