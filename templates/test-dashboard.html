@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Tracking Test Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+        .log-entry {
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-left: 3px solid #007bff;
+            background: #f8f9fa;
+        }
+        .log-error { border-left-color: #dc3545; background: #f8d7da; }
+        .log-success { border-left-color: #28a745; background: #d4edda; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="mb-3">
+                    <span class="status-indicator status-online" id="connectionStatus"></span>
+                    User Tracking Test Dashboard
+                </h1>
+                <p class="text-muted">Real-time monitoring of user tracking system</p>
+            </div>
+        </div>
+
+        <!-- Metrics Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="activeUsers">0</div>
+                    <div class="metric-label">Active Users Now</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="todayVisitors">0</div>
+                    <div class="metric-label">Today's Visitors</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="todayEvents">0</div>
+                    <div class="metric-label">Events Today</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="avgSessionTime">0s</div>
+                    <div class="metric-label">Avg Session Time</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Row -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Test Controls</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="testVisitTracking()">Test Visit Tracking</button>
+                            <button class="btn btn-success" onclick="testEventTracking()">Test Event Tracking</button>
+                            <button class="btn btn-warning" onclick="testHeartbeat()">Test Heartbeat</button>
+                            <button class="btn btn-info" onclick="testSessionEnd()">Test Session End</button>
+                            <button class="btn btn-secondary" onclick="clearLogs()">Clear Logs</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>API Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div id="apiStatus" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    <div>Checking...</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div id="dbStatus" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    <div>Checking...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Row -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <h5>Real-time Logs</h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleAutoScroll()">
+                            <span id="autoScrollText">Auto-scroll: ON</span>
+                        </button>
+                    </div>
+                    <div class="card-body" style="height: 400px; overflow-y: auto;" id="logContainer">
+                        <div id="logs">
+                            <div class="log-entry">Dashboard initialized...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TrackingDashboard {
+            constructor() {
+                this.autoScroll = true;
+                this.testSessionId = 'dashboard_test_' + Date.now();
+                this.init();
+            }
+
+            init() {
+                this.log('Dashboard starting up...', 'info');
+                this.checkApiStatus();
+                this.startDataRefresh();
+                this.log('Dashboard ready!', 'success');
+            }
+
+            log(message, type = 'info') {
+                const logContainer = document.getElementById('logs');
+                const timestamp = new Date().toLocaleTimeString();
+                const logClass = type === 'error' ? 'log-error' : 
+                                type === 'success' ? 'log-success' : '';
+                
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${logClass}`;
+                logEntry.innerHTML = `[${timestamp}] ${message}`;
+                
+                logContainer.appendChild(logEntry);
+                
+                if (this.autoScroll) {
+                    document.getElementById('logContainer').scrollTop = 
+                        document.getElementById('logContainer').scrollHeight;
+                }
+            }
+
+            async checkApiStatus() {
+                try {
+                    // Test basic API connectivity
+                    const healthResponse = await fetch('/health');
+                    const healthData = await healthResponse.json();
+                    
+                    if (healthResponse.ok) {
+                        document.getElementById('apiStatus').innerHTML = 
+                            '<span class="text-success">✓ API Online</span>';
+                        this.log('API health check passed', 'success');
+                    } else {
+                        throw new Error('API health check failed');
+                    }
+
+                    // Test analytics endpoint
+                    const analyticsResponse = await fetch('/api/analytics/dau');
+                    if (analyticsResponse.ok) {
+                        document.getElementById('dbStatus').innerHTML = 
+                            '<span class="text-success">✓ Database Connected</span>';
+                        this.log('Database connection verified', 'success');
+                    } else {
+                        document.getElementById('dbStatus').innerHTML = 
+                            '<span class="text-warning">⚠ Database Issues</span>';
+                        this.log('Database connection issues detected', 'error');
+                    }
+
+                } catch (error) {
+                    document.getElementById('apiStatus').innerHTML = 
+                        '<span class="text-danger">✗ API Offline</span>';
+                    document.getElementById('dbStatus').innerHTML = 
+                        '<span class="text-danger">✗ Database Error</span>';
+                    this.log(`API/Database error: ${error.message}`, 'error');
+                }
+            }
+
+            async refreshData() {
+                try {
+                    // Get real-time analytics
+                    const realtimeResponse = await fetch('/api/analytics/realtime');
+                    if (realtimeResponse.ok) {
+                        const realtimeData = await realtimeResponse.json();
+                        document.getElementById('activeUsers').textContent = 
+                            realtimeData.realtime.active_users_now;
+                    }
+
+                    // Get today's DAU
+                    const dauResponse = await fetch('/api/analytics/dau');
+                    if (dauResponse.ok) {
+                        const dauData = await dauResponse.json();
+                        document.getElementById('todayVisitors').textContent = 
+                            dauData.dau.today;
+                    }
+
+                    // Get engagement data
+                    const engagementResponse = await fetch('/api/analytics/engagement');
+                    if (engagementResponse.ok) {
+                        const engagementData = await engagementResponse.json();
+                        document.getElementById('todayEvents').textContent = 
+                            engagementData.engagement.total_events;
+                        document.getElementById('avgSessionTime').textContent = 
+                            Math.round(engagementData.engagement.average_session_time_seconds) + 's';
+                    }
+
+                    // Update connection status
+                    document.getElementById('connectionStatus').className = 
+                        'status-indicator status-online';
+
+                } catch (error) {
+                    this.log(`Data refresh error: ${error.message}`, 'error');
+                    document.getElementById('connectionStatus').className = 
+                        'status-indicator status-offline';
+                }
+            }
+
+            startDataRefresh() {
+                // Refresh data every 10 seconds
+                setInterval(() => {
+                    this.refreshData();
+                }, 10000);
+                
+                // Initial refresh
+                this.refreshData();
+            }
+
+            async testVisitTracking() {
+                this.log('Testing visit tracking...', 'info');
+                try {
+                    const response = await fetch('/api/track-visit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            page_url: window.location.href,
+                            session_id: this.testSessionId,
+                            test: true
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        this.log(`Visit tracking successful: ${JSON.stringify(result)}`, 'success');
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    this.log(`Visit tracking failed: ${error.message}`, 'error');
+                }
+            }
+
+            async testEventTracking() {
+                this.log('Testing event tracking...', 'info');
+                const events = ['article_read', 'article_listen', 'category_change', 'search'];
+                const randomEvent = events[Math.floor(Math.random() * events.length)];
+                
+                try {
+                    const response = await fetch('/api/track-event', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            event_name: randomEvent,
+                            session_id: this.testSessionId,
+                            page_url: window.location.href,
+                            event_data: { test: true }
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.log(`Event tracking successful: ${randomEvent}`, 'success');
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    this.log(`Event tracking failed: ${error.message}`, 'error');
+                }
+            }
+
+            async testHeartbeat() {
+                this.log('Testing heartbeat...', 'info');
+                try {
+                    const response = await fetch('/api/track-heartbeat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: this.testSessionId,
+                            time_on_page: 60000,
+                            is_active: true,
+                            page_url: window.location.href
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.log('Heartbeat successful', 'success');
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    this.log(`Heartbeat failed: ${error.message}`, 'error');
+                }
+            }
+
+            async testSessionEnd() {
+                this.log('Testing session end...', 'info');
+                try {
+                    const response = await fetch('/api/track-session-end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: this.testSessionId,
+                            total_time: 120000,
+                            page_views: 3,
+                            exit_type: 'test'
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.log('Session end tracking successful', 'success');
+                        // Generate new session ID for next tests
+                        this.testSessionId = 'dashboard_test_' + Date.now();
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    this.log(`Session end failed: ${error.message}`, 'error');
+                }
+            }
+
+            clearLogs() {
+                document.getElementById('logs').innerHTML = 
+                    '<div class="log-entry">Logs cleared...</div>';
+            }
+
+            toggleAutoScroll() {
+                this.autoScroll = !this.autoScroll;
+                document.getElementById('autoScrollText').textContent = 
+                    `Auto-scroll: ${this.autoScroll ? 'ON' : 'OFF'}`;
+            }
+        }
+
+        // Global functions for button clicks
+        let dashboard;
+
+        function testVisitTracking() { dashboard.testVisitTracking(); }
+        function testEventTracking() { dashboard.testEventTracking(); }
+        function testHeartbeat() { dashboard.testHeartbeat(); }
+        function testSessionEnd() { dashboard.testSessionEnd(); }
+        function clearLogs() { dashboard.clearLogs(); }
+        function toggleAutoScroll() { dashboard.toggleAutoScroll(); }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new TrackingDashboard();
+        });
+    </script>
+</body>
+</html>

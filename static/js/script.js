@@ -425,3 +425,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make it globally accessible
     window.languageSwitcher = languageSwitcher;
 });
+// Track visit when page loads
+function trackVisit(pageUrl) {
+    fetch('/api/track-visit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': navigator.userAgent // Optional: Send user agent
+        },
+        body: JSON.stringify({ page_url: pageUrl || window.location.href })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Visit tracked:', data);
+    })
+    .catch(error => {
+        console.error('Error tracking visit:', error);
+    });
+}
+
+// Call trackVisit when the page loads
+trackVisit();

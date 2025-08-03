@@ -1915,6 +1915,241 @@ def get_analytics_dashboard():
             app.logger.error(f"Error getting dashboard data: {str(e)}")
         return jsonify({'error': 'Failed to get dashboard data'}), 500
 
+
+# Add these endpoints to your Flask app
+
+@app.route('/api/track-heartbeat', methods=['POST'])
+@rate_limit('api_general')
+def track_heartbeat():
+    """Track user activity heartbeat"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        time_on_page = data.get('time_on_page', 0)
+        is_active = data.get('is_active', False)
+        
+        if not session_id:
+            return jsonify({'error': 'No session ID'}), 400
+        
+        # Update session data
+        heartbeat_data = {
+            'session_id': session_id,
+            'time_on_page': time_on_page,
+            'page_url': sanitize_html_input(data.get('page_url', '')),
+            'last_activity': data.get('last_activity', 0),
+            'is_active': is_active,
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'user_ip': request.environ.get('REMOTE_ADDR', 'unknown')
+        }
+        
+        # Store in session_heartbeats collection
+        db.collection('session_heartbeats').add(heartbeat_data)
+        
+        return jsonify({'status': 'ok'})
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error tracking heartbeat: {str(e)}")
+        return jsonify({'error': 'Failed to track heartbeat'}), 500
+
+@app.route('/api/track-session-end', methods=['POST'])
+@rate_limit('api_general')
+def track_session_end():
+    """Track when user session ends"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        total_time = data.get('total_time', 0)
+        page_views = data.get('page_views', 1)
+        
+        if not session_id:
+            return jsonify({'error': 'No session ID'}), 400
+        
+        session_data = {
+            'session_id': session_id,
+            'total_time_ms': total_time,
+            'total_time_seconds': total_time // 1000,
+            'page_views': page_views,
+            'final_url': sanitize_html_input(data.get('final_url', '')),
+            'exit_type': data.get('exit_type', 'unknown'),
+            'end_timestamp': firestore.SERVER_TIMESTAMP,
+            'user_ip': request.environ.get('REMOTE_ADDR', 'unknown'),
+            'date': datetime.now().strftime('%Y-%m-%d')
+        }
+        
+        # Store session end data
+        db.collection('user_sessions').add(session_data)
+        
+        # Update daily stats with session info
+        today = datetime.now().strftime('%Y-%m-%d')
+        stats_ref = db.collection('daily_stats').document(today)
+        stats_ref.set({
+            'date': today,
+            'total_session_time': firestore.Increment(total_time // 1000),
+            'total_sessions': firestore.Increment(1),
+            'average_session_length': 0,  # Will be calculated separately
+            'last_updated': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        
+        return jsonify({'status': 'session_ended'})
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error tracking session end: {str(e)}")
+        return jsonify({'error': 'Failed to track session end'}), 500
+
+@app.route('/api/track-event', methods=['POST'])
+@rate_limit('api_general')
+def track_event():
+    """Track specific user events"""
+    try:
+        data = request.get_json()
+        event_name = data.get('event_name', '').strip()
+        session_id = data.get('session_id')
+        
+        if not event_name or not session_id:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Sanitize event name
+        allowed_events = [
+            'article_listen', 'article_read', 'article_like', 'article_share',
+            'comment_toggle', 'comment_post', 'category_change', 'search',
+            'newsletter_subscribe', 'feedback_submit'
+        ]
+        
+        if event_name not in allowed_events:
+            return jsonify({'error': 'Invalid event name'}), 400
+        
+        event_data = {
+            'event_name': event_name,
+            'event_data': data.get('event_data', {}),
+            'session_id': session_id,
+            'page_url': sanitize_html_input(data.get('page_url', '')),
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'user_ip': request.environ.get('REMOTE_ADDR', 'unknown'),
+            'date': datetime.now().strftime('%Y-%m-%d')
+        }
+        
+        # Store event
+        db.collection('user_events').add(event_data)
+        
+        # Update daily event counts
+        today = datetime.now().strftime('%Y-%m-%d')
+        event_stats_ref = db.collection('daily_event_stats').document(f"{today}_{event_name}")
+        event_stats_ref.set({
+            'date': today,
+            'event_name': event_name,
+            'count': firestore.Increment(1),
+            'last_updated': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        
+        return jsonify({'status': 'event_tracked'})
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error tracking event: {str(e)}")
+        return jsonify({'error': 'Failed to track event'}), 500
+
+@app.route('/api/analytics/engagement', methods=['GET'])
+@rate_limit('api_general')
+def get_engagement_analytics():
+    """Get user engagement analytics"""
+    try:
+        date_ranges = calculate_date_ranges()
+        
+        # Get today's events
+        events_ref = db.collection('user_events')
+        today_events = events_ref.where('date', '==', date_ranges['today']).stream()
+        
+        event_counts = {}
+        total_events = 0
+        
+        for event_doc in today_events:
+            event_data = event_doc.to_dict()
+            event_name = event_data.get('event_name')
+            if event_name:
+                event_counts[event_name] = event_counts.get(event_name, 0) + 1
+                total_events += 1
+        
+        # Get session data for today
+        sessions_ref = db.collection('user_sessions')
+        today_sessions = sessions_ref.where('date', '==', date_ranges['today']).stream()
+        
+        total_session_time = 0
+        session_count = 0
+        
+        for session_doc in today_sessions:
+            session_data = session_doc.to_dict()
+            total_session_time += session_data.get('total_time_seconds', 0)
+            session_count += 1
+        
+        avg_session_time = total_session_time / session_count if session_count > 0 else 0
+        
+        return jsonify({
+            'date': date_ranges['today'],
+            'engagement': {
+                'total_events': total_events,
+                'event_breakdown': event_counts,
+                'total_sessions': session_count,
+                'total_session_time_seconds': total_session_time,
+                'average_session_time_seconds': round(avg_session_time, 2),
+                'average_session_time_minutes': round(avg_session_time / 60, 2)
+            },
+            'top_events': sorted(event_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting engagement analytics: {str(e)}")
+        return jsonify({'error': 'Failed to get engagement analytics'}), 500
+
+@app.route('/api/analytics/realtime', methods=['GET'])
+@rate_limit('api_general')
+def get_realtime_analytics():
+    """Get real-time analytics (last 30 minutes)"""
+    try:
+        # Get current time and 30 minutes ago
+        now = datetime.now()
+        thirty_minutes_ago = now - timedelta(minutes=30)
+        
+        # Get recent heartbeats
+        heartbeats_ref = db.collection('session_heartbeats')
+        recent_heartbeats = heartbeats_ref.where(
+            'timestamp', '>=', thirty_minutes_ago
+        ).where(
+            'is_active', '==', True
+        ).stream()
+        
+        active_sessions = set()
+        for heartbeat in recent_heartbeats:
+            heartbeat_data = heartbeat.to_dict()
+            active_sessions.add(heartbeat_data.get('session_id'))
+        
+        # Get recent events
+        events_ref = db.collection('user_events')
+        recent_events_query = events_ref.where('timestamp', '>=', thirty_minutes_ago)
+        recent_events = recent_events_query.stream()
+        
+        recent_event_count = 0
+        for event in recent_events:
+            recent_event_count += 1
+        
+        return jsonify({
+            'realtime': {
+                'active_users_now': len(active_sessions),
+                'events_last_30min': recent_event_count,
+                'timestamp': now.isoformat(),
+                'period': 'last_30_minutes'
+            }
+        })
+        
+    except Exception as e:
+        if app.debug:
+            app.logger.error(f"Error getting realtime analytics: {str(e)}")
+        return jsonify({'error': 'Failed to get realtime analytics'}), 500
+@app.route('/test-dashboard')
+def test_dashboard():
+    return send_file('test-dashboard.html')  # Or render_template
 # ============================================
 # APPLICATION STARTUP
 # ============================================
@@ -1939,4 +2174,4 @@ if __name__ == '__main__':
         setup_gemini_api(app.config['GEMINI_API_KEY'])
         
         # Run production server
-        app.run(debug=False, host='0.0.0.0', port=port)
+        app.run(debug=True, host='0.0.0.0', port=port)
