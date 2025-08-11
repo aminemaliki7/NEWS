@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO Meta -->
+  <meta name="description" content="REALTalk — The Digital Journal You Can Listen To. Discover world, business, technology, science news, and daily Sudoku puzzles." />
+  <link rel="canonical" href="https://newsnap.space/" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- Open Graph (Facebook, LinkedIn, etc.) -->
+  <meta property="og:title" content="REALTalk — The Digital Journal You Can Listen To" />
+  <meta property="og:description" content="Explore trusted news in world, business, tech, and more with REALTalk. Enjoy daily Sudoku puzzles to challenge your mind." />
+  <meta property="og:image" content="https://newsnap.space/static/images/og-image.jpg" />
+  <meta property="og:url" content="https://newsnap.space/" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="REALTalk — The Digital Journal You Can Listen To" />
+  <meta name="twitter:description" content="Stay updated with trusted news and challenge your brain with REALTalk’s daily Sudoku puzzles." />
+  <meta name="twitter:image" content="https://newsnap.space/static/images/og-image.jpg" />
+
+  <!-- Page Title -->
+  <title>REALTalk — The Digital Journal You Can Listen To</title>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/news.css') }}" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="/static/images/favicon1.jpg" type="image/x-icon">
+
+  <!-- Google AdSense -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ config.GOOGLE_ADS_CLIENT }}"
+     crossorigin="anonymous"></script>
+
+  <!-- Inline Styles -->
+  <style>
+    .journal-page-wrapper {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    .hero-section {
+      background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.1) 100%);
+      padding: 3rem 0;
+    }
+    .hero-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+    .hero-subtitle {
+      font-size: 1.2rem;
+      font-style: italic;
+      color: #6c757d;
+    }
+    .feature-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 4px 15px rgba(155, 155, 155, 0.1);
+    }
+    .cta-button {
+      font-size: 1.1rem;
+      padding: 0.75rem 2rem;
+    }
+    .navbar {
+      background-color: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .navbar-brand {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fdfdfd;
+      display: flex;
+      align-items: center;
+    }
+    .navbar-brand img {
+      height: 32px;
+      margin-right: 0.5rem;
+    }
+    .navbar-nav {
+  margin-left: auto ; /* pushes nav to the right */
+  align-items: flex-start; /* aligns items to top */
+}
+
+.navbar-nav .nav-link {
+  color: #dddddd;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  transition: color 0.2s ease;
+}
+
+    .navbar-nav .nav-link:hover {
+      color: #b9b9b9;
+    }
+    .navbar-nav .nav-link.active {
+      color: #f0eeee;
+      border-bottom: 2px solid #e2e2e2;
+    }
+    .search-btn {
+      background: none;
+      border: none;
+      padding: 0.5rem;
+      color: #333;
+    }
+    .search-btn:hover {
+      color: #746969;
+    }
+    .masthead {
+      padding: 1.5rem 0;
+    }
+    .masthead-separator {
+      border-color: #e5e5e5;
+    }
+    .sudoku-section {
+      background: #f8f9fa;
+      padding: 3rem 0;
+    }
+    .sudoku-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .sudoku-cta {
+      font-size: 1rem;
+      padding: 0.75rem 1.5rem;
+    }
+    @media (max-width: 768px) {
+      .navbar-nav {
+        padding: 1rem 0;
+      }
+      .navbar-nav .nav-link {
+        padding: 0.75rem 1rem;
+      }
+      .hero-title {
+        font-size: 2rem;
+      }
+      .sudoku-title {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KSBP29N04K"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KSBP29N04K');
+  </script>
+</head>
+
+<body>
+  <div class="journal-page-wrapper">
+    <!-- Professional Header -->
+    <nav class="navbar navbar-expand-lg sticky-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/">
+          <img src="/static/images/logo.png" alt="REALTalk Logo">
+       
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link active" href="/">Home</a>
+            </li>
+        
+            <li class="nav-item">
+              <a class="nav-link" href="/about">About</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/contact">Contact</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newsletterModal">Subscribe</a>
+            </li>
+          </ul>
+          
+        </div>
+      </div>
+    </nav>
+
+    <header class="masthead text-center py-4">
+      <div class="container-fluid">
+        <h1 class="journal-title text-uppercase">REALTalk</h1>
+        <p class="slogan text-muted mb-2" style="font-style: italic; font-size: 0.95em;">
+          What you consume shapes how you think, feel, and act.
+        </p>
+        <hr class="masthead-separator">
+      </div>
+    </header>
+
+    <main class="container-fluid">
+      <section class="hero-section text-center">
+        <div class="container">
+          <h2 class="hero-title">Welcome to REALTalk</h2>
+          <p class="hero-subtitle mb-4">The Digital Journal You Can Listen To</p>
+          <p class="lead mb-4">
+            REALTalk delivers trusted news in world, business, technology, science, and more. Read articles from reliable sources or listen to audio narrations in your preferred language. Stay informed, engage with our community, and challenge your mind with our daily Sudoku puzzles.
+          </p>
+          <a href="/news" class="btn btn-dark cta-button">Explore News Now</a>
+        </div>
+      </section>
+
+      <hr class="section-separator my-5">
+
+      <section class="features-section py-5">
+        <div class="container">
+          <h3 class="text-center mb-5" style="font-weight: 600;">Why Choose REALTalk?</h3>
+          <div class="row g-4">
+            <div class="col-md-4">
+              <div class="card feature-card p-4 border-0 shadow-sm text-center">
+                <h4 class="mb-3">Trusted Sources</h4>
+                <p class="text-muted">
+                  We curate articles from reputable outlets like The Guardian, BBC, and AP to ensure you get accurate and reliable news.
+                </p>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card feature-card p-4 border-0 shadow-sm text-center">
+                <h4 class="mb-3">Audio Narration</h4>
+                <p class="text-muted">
+                  Listen to news in multiple languages with our advanced audio narration feature, perfect for on-the-go updates.
+                </p>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card feature-card p-4 border-0 shadow-sm text-center">
+                <h4 class="mb-3">Daily Sudoku</h4>
+                <p class="text-muted">
+                  Challenge your brain with a new Sudoku puzzle every day, available online or printable for offline fun.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="section-separator my-5">
+
+      <section class="about-section py-5">
+        <div class="container">
+          <h3 class="text-center mb-5" style="font-weight: 600;">About REALTalk</h3>
+          <div class="row align-items-center">
+            <div class="col-md-6">
+              <p class="text-muted mb-4">
+                REALTalk is more than just a news platform—it’s a community-driven space designed to inform and inspire. Our mission is to make quality journalism accessible to everyone, whether you prefer reading in-depth articles or listening to concise audio summaries. We prioritize user experience with a clean, ad-supported interface and interactive features like commenting and sharing.
+              </p>
+              <p class="text-muted">
+                Subscribe to our weekly newsletter for curated news updates, explore categories like World, Business, Technology, and Science, or test your logic with our daily Sudoku puzzles.
+              </p>
+            </div>
+            <div class="col-md-6 text-center">
+              <img src="/static/images/og-image.jpg" alt="REALTalk Mission" class="img-fluid rounded" style="max-height: 300px; object-fit: cover;">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="section-separator my-5">
+
+      <section class="sudoku-section text-center">
+        <div class="container">
+          <h3 class="sudoku-title">Daily Sudoku Challenge</h3>
+          <p class="text-muted mb-4">
+            Daily Sudoku, just like in the classic newspapers.
+          </p>
+        </div>
+      </section>
+
+      <div class="text-center my-4">
+        <a href="#top" class="back-to-top-link text-decoration-none text-dark">Back to Top &uarr;</a>
+      </div>
+    </main>
+
+    <!-- Search Modal -->
+    <div class="modal fade" id="searchModal" tabindex="-1" aria-labelledby="searchModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="searchModalLabel">Search REALTalk</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="text" class="form-control" id="searchInput" placeholder="Search news articles..." maxlength="100">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-dark" id="searchSubmitBtn">Search</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Newsletter Modal -->
+    <div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content p-3">
+          <form id="newsletterForm">
+            <div class="modal-header py-2">
+              <h6 class="modal-title w-100 text-center" id="newsletterModalLabel">
+                Subscribe to our Newsletter<br>
+                <small class="text-muted">Weekly trusted news in your inbox</small>
+              </h6>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.8rem;"></button>
+            </div>
+            <div class="modal-body py-2">
+              <div class="mb-2">
+                <label for="newsletterName" class="form-label small">Full Name</label>
+                <input type="text" class="form-control form-control-sm" id="newsletterName" name="name" required minlength="2" maxlength="100" placeholder="Your name">
+              </div>
+              <div class="mb-2">
+                <label for="newsletterEmail" class="form-label small">Email</label>
+                <input type="email" class="form-control form-control-sm" id="newsletterEmail" name="email" required placeholder="Your email">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small">Topics you like:</label>
+                <div class="row row-cols-2 g-1 small">
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="general" id="catGeneral" name="categories">
+                      <label class="form-check-label" for="catGeneral">📰 General</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="world" id="catWorld" name="categories">
+                      <label class="form-check-label" for="catWorld">🌍 World</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="business" id="catBusiness" name="categories">
+                      <label class="form-check-label" for="catBusiness">💰 Business</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="technology" id="catTechnology" name="categories">
+                      <label class="form-check-label" for="catTechnology">🤖 Tech</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="sports" id="catSports" name="categories">
+                      <label class="form-check-label" for="catSports">🏀 Sports</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="entertainment" id="catEntertainment" name="categories">
+                      <label class="form-check-label" for="catEntertainment">🎬 Entertain.</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="health" id="catHealth" name="categories">
+                      <label class="form-check-label" for="catHealth">🏥 Health</label>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="science" id="catScience" name="categories">
+                      <label class="form-check-label" for="catScience">🚀 Science</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer justify-content-between py-2">
+              <button type="submit" class="btn btn-dark btn-sm w-50">Subscribe</button>
+              <button type="button" class="btn btn-secondary btn-sm w-25" data-bs-dismiss="modal">Close</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Button -->
+    <button id="faqButton" title="Frequently Asked Questions">FAQ</button>
+
+    <!-- FAQ Box -->
+    <div id="faqBox">
+      <div id="faqHeader">
+        <span class="faq-title">FREQUENTLY ASKED</span>
+        <button id="faqClose" title="Close">&times;</button>
+      </div>
+      <div id="faqMessages">
+        <div class="faq-message bot-message">
+          <div class="message-content">
+            <strong>REALTalk FAQ</strong><br>
+            Find answers to common questions below.
+          </div>
+        </div>
+      </div>
+      <div id="faqFooter">
+        <button class="faq-question" data-reply="REALTalk is a clean news platform. Read or listen to trusted articles, enjoy daily Sudoku puzzles, and get weekly updates via our newsletter.">
+          What is REALTalk?
+        </button>
+        <button class="faq-question" data-reply="We use trusted sources like The Guardian, BBC, AP, and others known for reliable reporting.">
+          How do you choose news sources?
+        </button>
+        <button class="faq-question" data-reply="Yes — you can comment and discuss articles with other readers.">
+          Can I interact with other readers?
+        </button>
+        <button class="faq-question" data-reply="Our daily Sudoku puzzles are available in easy, medium, and hard levels. Play online or print them for offline solving.">
+          What are the Sudoku puzzles like?
+        </button>
+        <button class="faq-question" data-reply="Absolutely! Use the feedback form below to let us know what you’d like to see.">
+          Can I suggest a new feature or source?
+        </button>
+        <button class="faq-question" data-reply="Use the form below to share feedback, ideas, or report issues. We’re listening.">
+          Send Feedback
+        </button>
+        <div id="feedbackSection" style="display: none;">
+          <div class="feedback-divider">───</div>
+          <textarea 
+            id="feedbackInput" 
+            placeholder="Share your thoughts, suggestions, or report issues..."
+            maxlength="500"
+            rows="3"
+          ></textarea>
+          <div class="feedback-actions">
+            <button id="feedbackCancel" class="btn-text">Cancel</button>
+            <button id="feedbackSubmit" class="btn-submit">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="journal-footer text-center py-4 mt-5">
+      <hr class="footer-separator">
+      <small class="text-muted">
+        © 2025 REALTalk • 
+        <a href="/privacy-policy" class="text-muted text-decoration-none">Privacy Policy</a> • 
+        <a href="/terms-of-service" class="text-muted text-decoration-none">Terms of Use</a>
+      </small>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/news.js') }}"></script>
+  <script>
+    if (window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1') {
+      console.log = console.warn = console.error = function() {};
+    }
+
+    // User Tracking System
+    class UserTracker {
+      constructor() {
+        this.sessionId = this.generateSessionId();
+        this.startTime = Date.now();
+        this.lastActivity = Date.now();
+        this.pageViews = 1;
+        this.hasTrackedVisit = false;
+        this.init();
+      }
+
+      generateSessionId() {
+        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      }
+
+      init() {
+        this.trackPageVisit();
+        this.setupActivityTracking();
+        this.setupVisibilityTracking();
+        this.setupUnloadTracking();
+      }
+
+      async trackPageVisit() {
+        if (this.hasTrackedVisit) return;
+        try {
+          const trackingData = {
+            page_url: window.location.href,
+            page_title: document.title,
+            referrer: document.referrer || '',
+            user_agent: navigator.userAgent,
+            screen_resolution: `${screen.width}x${screen.height}`,
+            viewport_size: `${window.innerWidth}x${window.innerHeight}`,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            language: navigator.language,
+            session_id: this.sessionId,
+            timestamp: new Date().toISOString()
+          };
+          const response = await fetch('/api/track-visit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(trackingData)
+          });
+          if (response.ok) {
+            const result = await response.json();
+            console.log('Visit tracked:', result.visitor_id);
+            this.hasTrackedVisit = true;
+            sessionStorage.setItem('visitor_id', result.visitor_id);
+            sessionStorage.setItem('returning_visitor', result.returning_visitor);
+          }
+        } catch (error) {
+          console.warn('Failed to track visit:', error);
+        }
+      }
+
+      setupActivityTracking() {
+        const events = ['click', 'scroll', 'keypress', 'mousemove', 'touchstart'];
+        events.forEach(event => {
+          document.addEventListener(event, () => {
+            this.lastActivity = Date.now();
+          }, { passive: true });
+        });
+        setInterval(() => {
+          this.sendHeartbeat();
+        }, 30000);
+      }
+
+      setupVisibilityTracking() {
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            this.trackPageExit();
+          } else {
+            this.trackPageReturn();
+          }
+        });
+      }
+
+      setupUnloadTracking() {
+        window.addEventListener('beforeunload', () => {
+          this.trackPageExit(true);
+        });
+      }
+
+      async sendHeartbeat() {
+        const timeOnPage = Date.now() - this.startTime;
+        const timeSinceActivity = Date.now() - this.lastActivity;
+        if (timeSinceActivity > 120000) return;
+        try {
+          const heartbeatData = {
+            session_id: this.sessionId,
+            time_on_page: timeOnPage,
+            page_url: window.location.href,
+            last_activity: timeSinceActivity,
+            is_active: timeSinceActivity < 10000
+          };
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/track-heartbeat', JSON.stringify(heartbeatData));
+          } else {
+            fetch('/api/track-heartbeat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(heartbeatData)
+            }).catch(() => {});
+          }
+        } catch (error) {}
+      }
+
+      trackPageExit(isUnload = false) {
+        const sessionData = {
+          session_id: this.sessionId,
+          total_time: Date.now() - this.startTime,
+          page_views: this.pageViews,
+          final_url: window.location.href,
+          exit_type: isUnload ? 'unload' : 'visibility_change'
+        };
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/track-session-end', JSON.stringify(sessionData));
+        }
+      }
+
+      trackPageReturn() {
+        this.lastActivity = Date.now();
+      }
+
+      trackEvent(eventName, eventData = {}) {
+        const trackingData = {
+          event_name: eventName,
+          event_data: eventData,
+          session_id: this.sessionId,
+          page_url: window.location.href,
+          timestamp: new Date().toISOString()
+        };
+        fetch('/api/track-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(trackingData)
+        }).catch(() => {});
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.userTracker = new UserTracker();
+      // Track navigation interactions
+      document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+          window.userTracker?.trackEvent('nav_click', { page: link.textContent });
+        });
+      });
+      // Track search button click
+      document.querySelector('.search-btn')?.addEventListener('click', () => {
+        window.userTracker?.trackEvent('search_open');
+      });
+      // Track search submission
+      document.querySelector('#searchSubmitBtn')?.addEventListener('click', () => {
+        const query = document.querySelector('#searchInput')?.value;
+        if (query) {
+          window.userTracker?.trackEvent('search', { query: query });
+        }
+      });
+      // Track Sudoku CTA click
+      document.querySelector('.sudoku-cta')?.addEventListener('click', () => {
+        window.userTracker?.trackEvent('sudoku_cta_click');
+      });
+    });
+  </script>
+</body>
+</html>

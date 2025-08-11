@@ -836,11 +836,8 @@ def index():
         articles = []
 
     return render_template(
-        'news.html',
-        voices=AVAILABLE_VOICES,
-        languages=AVAILABLE_LANGUAGES,
-        articles=articles,
-        prefill=prefill
+        'homepage.html',
+     
     )
 
 @app.route('/upload', methods=['POST'])
@@ -1916,87 +1913,7 @@ def get_analytics_dashboard():
         return jsonify({'error': 'Failed to get dashboard data'}), 500
 
 
-# Add these endpoints to your Flask app
 
-@app.route('/api/track-heartbeat', methods=['POST'])
-@rate_limit('api_general')
-def track_heartbeat():
-    """Track user activity heartbeat"""
-    try:
-        data = request.get_json()
-        session_id = data.get('session_id')
-        time_on_page = data.get('time_on_page', 0)
-        is_active = data.get('is_active', False)
-        
-        if not session_id:
-            return jsonify({'error': 'No session ID'}), 400
-        
-        # Update session data
-        heartbeat_data = {
-            'session_id': session_id,
-            'time_on_page': time_on_page,
-            'page_url': sanitize_html_input(data.get('page_url', '')),
-            'last_activity': data.get('last_activity', 0),
-            'is_active': is_active,
-            'timestamp': firestore.SERVER_TIMESTAMP,
-            'user_ip': request.environ.get('REMOTE_ADDR', 'unknown')
-        }
-        
-        # Store in session_heartbeats collection
-        db.collection('session_heartbeats').add(heartbeat_data)
-        
-        return jsonify({'status': 'ok'})
-        
-    except Exception as e:
-        if app.debug:
-            app.logger.error(f"Error tracking heartbeat: {str(e)}")
-        return jsonify({'error': 'Failed to track heartbeat'}), 500
-
-@app.route('/api/track-session-end', methods=['POST'])
-@rate_limit('api_general')
-def track_session_end():
-    """Track when user session ends"""
-    try:
-        data = request.get_json()
-        session_id = data.get('session_id')
-        total_time = data.get('total_time', 0)
-        page_views = data.get('page_views', 1)
-        
-        if not session_id:
-            return jsonify({'error': 'No session ID'}), 400
-        
-        session_data = {
-            'session_id': session_id,
-            'total_time_ms': total_time,
-            'total_time_seconds': total_time // 1000,
-            'page_views': page_views,
-            'final_url': sanitize_html_input(data.get('final_url', '')),
-            'exit_type': data.get('exit_type', 'unknown'),
-            'end_timestamp': firestore.SERVER_TIMESTAMP,
-            'user_ip': request.environ.get('REMOTE_ADDR', 'unknown'),
-            'date': datetime.now().strftime('%Y-%m-%d')
-        }
-        
-        # Store session end data
-        db.collection('user_sessions').add(session_data)
-        
-        # Update daily stats with session info
-        today = datetime.now().strftime('%Y-%m-%d')
-        stats_ref = db.collection('daily_stats').document(today)
-        stats_ref.set({
-            'date': today,
-            'total_session_time': firestore.Increment(total_time // 1000),
-            'total_sessions': firestore.Increment(1),
-            'average_session_length': 0,  # Will be calculated separately
-            'last_updated': firestore.SERVER_TIMESTAMP
-        }, merge=True)
-        
-        return jsonify({'status': 'session_ended'})
-        
-    except Exception as e:
-        if app.debug:
-            app.logger.error(f"Error tracking session end: {str(e)}")
-        return jsonify({'error': 'Failed to track session end'}), 500
 
 @app.route('/api/track-event', methods=['POST'])
 @rate_limit('api_general')
