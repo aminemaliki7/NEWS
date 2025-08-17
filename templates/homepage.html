@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+  
   <!-- SEO Meta -->
   <meta name="description" content="REALTalk — The Digital Journal You Can Listen To. Discover world, business, technology, science news, and daily Sudoku puzzles." />
   <link rel="canonical" href="https://newsnap.space/" />
@@ -11,517 +11,1003 @@
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta http-equiv="X-XSS-Protection" content="1; mode=block">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-
+  
   <!-- Open Graph (Facebook, LinkedIn, etc.) -->
   <meta property="og:title" content="REALTalk — The Digital Journal You Can Listen To" />
   <meta property="og:description" content="Explore trusted news in world, business, tech, and more with REALTalk. Enjoy daily Sudoku puzzles to challenge your mind." />
   <meta property="og:image" content="https://newsnap.space/static/images/og-image.jpg" />
   <meta property="og:url" content="https://newsnap.space/" />
-
+  
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="REALTalk — The Digital Journal You Can Listen To" />
   <meta name="twitter:description" content="Stay updated with trusted news and challenge your brain with REALTalk's daily Sudoku puzzles." />
   <meta name="twitter:image" content="https://newsnap.space/static/images/og-image.jpg" />
-
+  
   <!-- Page Title -->
   <title>REALTalk — The Digital Journal You Can Listen To</title>
-
-  <!-- Stylesheets -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/news.css') }}" />
-
+  
   <!-- Favicon -->
   <link rel="icon" href="/static/images/favicon1.jpg" type="image/x-icon">
-
-  <!-- Google AdSense -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ config.GOOGLE_ADS_CLIENT }}"
-     crossorigin="anonymous"></script>
-
-  <!-- Inline Styles -->
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <style>
-    .journal-page-wrapper {
-      max-width: 100%;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --primary-black: #000000;
+      --secondary-black: #1d1d1f;
+      --light-grey: #f5f5f7;
+      --medium-grey: #86868b;
+      --dark-grey: #424245;
+      --white: #ffffff;
+      --glass-bg: rgba(255, 255, 255, 0.8);
+      --shadow-light: rgba(0, 0, 0, 0.04);
+      --shadow-medium: rgba(0, 0, 0, 0.08);
+      --shadow-strong: rgba(0, 0, 0, 0.16);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: var(--secondary-black);
+      background: var(--white);
       overflow-x: hidden;
     }
-    .hero-section {
-      background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.1) 100%);
-      padding: 3rem 0;
+    
+    /* Smooth scrolling */
+    html {
+      scroll-behavior: smooth;
     }
-    .hero-title {
-      font-size: 2.5rem;
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 1rem;
-    }
-    .hero-subtitle {
-      font-size: 1.2rem;
-      font-style: italic;
-      color: #6c757d;
-    }
-    .feature-card {
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .feature-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 4px 15px rgba(155, 155, 155, 0.1);
-    }
-    .features-section .row {
-      display: flex;
-      align-items: stretch;
-    }
-    .features-section .col-md-4 {
-      display: flex;
-    }
-    .cta-button {
-      font-size: 1.1rem;
-      padding: 0.75rem 2rem;
-    }
+    
+    /* Navigation */
     .navbar {
-      background-color: #fff;
-      border-bottom: 1px solid #e5e5e5;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      padding: 1rem 0;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .navbar-brand {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #fdfdfd;
+    
+    .navbar.scrolled {
+      padding: 0.5rem 0;
+      background: rgba(255, 255, 255, 0.98);
+    }
+    
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
     }
-    .navbar-brand img {
-      height: 32px;
-      margin-right: 0.5rem;
+    
+    .nav-logo {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--primary-black);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    .navbar-nav {
-      margin-left: auto ; /* pushes nav to the right */
-      align-items: flex-start; /* aligns items to top */
+    
+    .nav-links {
+      display: flex;
+      list-style: none;
+      gap: 2rem;
+      align-items: center;
     }
-
-    .navbar-nav .nav-link {
-      color: #dddddd;
+    
+    .nav-link {
+      color: var(--secondary-black);
+      text-decoration: none;
+      font-weight: 400;
+      font-size: 0.95rem;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    
+    .nav-link:hover {
+      color: var(--primary-black);
+    }
+    
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 2px;
+      bottom: -4px;
+      left: 50%;
+      background: var(--primary-black);
+      transition: all 0.3s ease;
+      transform: translateX(-50%);
+    }
+    
+    .nav-link:hover::after,
+    .nav-link.active::after {
+      width: 100%;
+    }
+    
+    .mobile-menu {
+      display: none;
+      flex-direction: column;
+      cursor: pointer;
+      gap: 4px;
+    }
+    
+    .mobile-menu span {
+      width: 24px;
+      height: 2px;
+      background: var(--primary-black);
+      transition: 0.3s;
+    }
+    
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: linear-gradient(135deg, var(--white) 0%, var(--light-grey) 100%);
+      overflow: hidden;
+    }
+    
+    .hero-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.03;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="black" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+    }
+    
+    .floating-elements {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    .floating-element {
+      position: absolute;
+      background: var(--primary-black);
+      border-radius: 50%;
+      opacity: 0.02;
+      animation: float 20s infinite linear;
+    }
+    
+    @keyframes float {
+      from {
+        transform: translateY(100vh) rotate(0deg);
+      }
+      to {
+        transform: translateY(-100px) rotate(360deg);
+      }
+    }
+    
+    .hero-content {
+      max-width: 900px;
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      z-index: 2;
+    }
+    
+    .hero-badge {
+      display: inline-block;
+      padding: 0.5rem 1.5rem;
+      background: var(--primary-black);
+      color: var(--white);
+      border-radius: 50px;
+      font-size: 0.85rem;
       font-weight: 500;
-      padding: 0.5rem 1rem;
-      transition: color 0.2s ease;
+      margin-bottom: 2rem;
+      opacity: 0;
+      animation: slideUp 1s ease 0.5s forwards;
     }
-
-    .navbar-nav .nav-link:hover {
-      color: #b9b9b9;
+    
+    .hero-title {
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, var(--primary-black) 0%, var(--dark-grey) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      animation: slideUp 1s ease 0.7s forwards;
     }
-    .navbar-nav .nav-link.active {
-      color: #f0eeee;
-      border-bottom: 2px solid #e2e2e2;
+    
+    .hero-subtitle {
+      font-size: 1.5rem;
+      color: var(--dark-grey);
+      margin-bottom: 2rem;
+      font-weight: 400;
+      opacity: 0;
+      animation: slideUp 1s ease 0.9s forwards;
     }
-    .search-btn {
-      background: none;
+    
+    .hero-description {
+      font-size: 1.1rem;
+      color: var(--medium-grey);
+      margin-bottom: 3rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      opacity: 0;
+      animation: slideUp 1s ease 1.1s forwards;
+    }
+    
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: slideUp 1s ease 1.3s forwards;
+    }
+    
+    .btn-primary {
+      background: var(--primary-black);
+      color: var(--white);
+      padding: 1rem 2.5rem;
       border: none;
-      padding: 0.5rem;
-      color: #333;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      position: relative;
+      overflow: hidden;
     }
-    .search-btn:hover {
-      color: #746969;
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px var(--shadow-strong);
+      color: var(--white);
     }
-    .masthead {
-      padding: 1.5rem 0;
+    
+    .btn-secondary {
+      background: transparent;
+      color: var(--primary-black);
+      padding: 1rem 2.5rem;
+      border: 2px solid var(--primary-black);
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .masthead-separator {
-      border-color: #e5e5e5;
+    
+    .btn-secondary:hover {
+      background: var(--primary-black);
+      color: var(--white);
+      transform: translateY(-2px);
     }
-    .sudoku-section {
-      background: #f8f9fa;
-      padding: 3rem 0;
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    .sudoku-title {
-      font-size: 1.8rem;
+    
+    /* Features Section */
+    .features {
+      padding: 8rem 2rem;
+      background: var(--white);
+      position: relative;
+    }
+    
+    .features-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .section-title {
+      text-align: center;
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--primary-black);
+    }
+    
+    .section-subtitle {
+      text-align: center;
+      font-size: 1.2rem;
+      color: var(--medium-grey);
+      margin-bottom: 5rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 3rem;
+      margin-top: 4rem;
+    }
+    
+    .feature-card {
+      background: var(--white);
+      border-radius: 24px;
+      padding: 3rem 2rem;
+      text-align: center;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+    
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.08) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px var(--shadow-medium);
+    }
+    
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+    
+    .feature-icon {
+      width: 80px;
+      height: 80px;
+      background: var(--primary-black);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 2rem;
+      font-size: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .feature-title {
+      font-size: 1.5rem;
       font-weight: 600;
       margin-bottom: 1rem;
+      color: var(--primary-black);
+      position: relative;
+      z-index: 1;
     }
-    .sudoku-cta {
+    
+    .feature-description {
+      color: var(--medium-grey);
       font-size: 1rem;
-      padding: 0.75rem 1.5rem;
+      line-height: 1.6;
+      position: relative;
+      z-index: 1;
     }
-    .about-section {
-      background: #f8f9fa;
-      padding: 3rem 0;
+    
+    /* Stats Section */
+    .stats {
+      padding: 6rem 2rem;
+      background: var(--light-grey);
     }
-    .contact-section {
-      background: #ffffff;
-      padding: 3rem 0;
+    
+    .stats-container {
+      max-width: 1000px;
+      margin: 0 auto;
     }
-    .section-title {
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 2rem;
-      color: #333;
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 3rem;
+      text-align: center;
     }
-    .contact-card {
-      background: #f8f9fa;
-      border-radius: 10px;
-      padding: 2rem;
-      border: none;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    
+    .stat-item {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s ease;
     }
-    .contact-email {
-      font-size: 1.1rem;
+    
+    .stat-item.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .stat-number {
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--primary-black);
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+      color: var(--medium-grey);
       font-weight: 500;
-      color: #333;
+      font-size: 1rem;
     }
-    .contact-email a {
-      color: #007bff;
+    
+    /* About Section */
+    .about {
+      padding: 8rem 2rem;
+      background: var(--white);
+    }
+    
+    .about-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6rem;
+      align-items: center;
+    }
+    
+    .about-content h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      color: var(--primary-black);
+    }
+    
+    .about-content p {
+      font-size: 1.1rem;
+      color: var(--medium-grey);
+      margin-bottom: 1.5rem;
+      line-height: 1.7;
+    }
+    
+    .about-visual {
+      position: relative;
+      height: 400px;
+      background: var(--light-grey);
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .pulse-animation {
+      width: 100px;
+      height: 100px;
+      background: var(--primary-black);
+      border-radius: 50%;
+      position: relative;
+      animation: pulse 2s infinite;
+    }
+    
+    .pulse-animation::before,
+    .pulse-animation::after {
+      content: '';
+      position: absolute;
+      border: 2px solid var(--primary-black);
+      border-radius: 50%;
+      opacity: 0;
+      animation: pulse-ring 2s infinite;
+    }
+    
+    .pulse-animation::before {
+      animation-delay: 0.5s;
+    }
+    
+    .pulse-animation::after {
+      animation-delay: 1s;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
+    @keyframes pulse-ring {
+      0% {
+        width: 100px;
+        height: 100px;
+        top: -2px;
+        left: -2px;
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      50% {
+        opacity: 0.3;
+      }
+      100% {
+        width: 200px;
+        height: 200px;
+        top: -52px;
+        left: -52px;
+        opacity: 0;
+        transform: scale(1.2);
+      }
+    }
+    
+    /* Contact Section */
+    .contact {
+      padding: 8rem 2rem;
+      background: var(--light-grey);
+    }
+    
+    .contact-container {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .contact h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--primary-black);
+    }
+    
+    .contact p {
+      font-size: 1.1rem;
+      color: var(--medium-grey);
+      margin-bottom: 3rem;
+    }
+    
+    .contact-card {
+      background: var(--white);
+      border-radius: 24px;
+      padding: 3rem;
+      box-shadow: 0 10px 40px var(--shadow-light);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    .contact-email {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--primary-black);
       text-decoration: none;
+      display: inline-block;
+      position: relative;
     }
-    .contact-email a:hover {
-      text-decoration: underline;
+    
+    .contact-email::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 2px;
+      bottom: -4px;
+      left: 0;
+      background: var(--primary-black);
+      transition: width 0.3s ease;
     }
+    
+    .contact-email:hover::after {
+      width: 100%;
+    }
+    
+    /* Footer */
+    .footer {
+      padding: 3rem 2rem;
+      background: var(--primary-black);
+      color: var(--white);
+      text-align: center;
+    }
+    
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .footer-links a {
+      color: var(--medium-grey);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    
+    .footer-links a:hover {
+      color: var(--white);
+    }
+    
+    .footer-copyright {
+      color: var(--medium-grey);
+      font-size: 0.9rem;
+    }
+    
+    /* Responsive Design */
     @media (max-width: 768px) {
-      .navbar-nav {
-        padding: 1rem 0;
+      .nav-links {
+        display: none;
       }
-      .navbar-nav .nav-link {
-        padding: 0.75rem 1rem;
+      
+      .mobile-menu {
+        display: flex;
       }
+      
       .hero-title {
-        font-size: 2rem;
+        font-size: 3rem;
       }
-      .sudoku-title, .section-title {
-        font-size: 1.5rem;
+      
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
       }
+      
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+      }
+      
+      .about-container {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+      }
+      
+      .cta-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+    
+    /* Scroll animations */
+    .scroll-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    
+    .scroll-reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
     }
   </style>
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KSBP29N04K"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-KSBP29N04K');
-  </script>
 </head>
 
 <body>
-  <div class="journal-page-wrapper">
-    <!-- Professional Header -->
-    <nav class="navbar navbar-expand-lg sticky-top">
-      <div class="container-fluid">
-        <a class="navbar-brand" href="/">
-          <img src="/static/images/logo.png" alt="REALTalk Logo">
-       
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav me-auto">
-            <li class="nav-item">
-              <a class="nav-link active" href="/">Home</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#about">About</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#contact">Contact</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#newsletterModal">Subscribe</a>
-            </li>
-          </ul>
-          
-        </div>
-      </div>
-    </nav>
-
-    <header class="masthead text-center py-4">
-      <div class="container-fluid">
-        <h1 class="journal-title text-uppercase">REALTalk</h1>
-        <p class="slogan text-muted mb-2" style="font-style: italic; font-size: 0.95em;">
-          What you consume shapes how you think, feel, and act.
-        </p>
-        <hr class="masthead-separator">
-      </div>
-    </header>
-
-    <main class="container-fluid">
-      <section class="hero-section text-center">
-        <div class="container">
-          <h2 class="hero-title">Welcome to REALTalk</h2>
-          <p class="hero-subtitle mb-4">The Digital Journal You Can Listen To</p>
-          <p class="lead mb-4">
-            REALTalk delivers trusted news in world, business, technology, science, and more. Read articles from reliable sources or listen to audio narrations in your preferred language. Stay informed, engage with our community, and challenge your mind with our daily Sudoku puzzles.
-          </p>
-          <a href="/news" class="btn btn-dark cta-button">Explore News Now</a>
-        </div>
-      </section>
-
-      <hr class="section-separator my-5">
-
-      <section class="features-section py-5">
-        <div class="container">
-          <h3 class="text-center mb-5" style="font-weight: 600;">Why Choose REALTalk?</h3>
-          <div class="row g-4">
-            <div class="col-md-4">
-              <div class="card feature-card p-4 border-0 shadow-sm text-center">
-                <h4 class="mb-3">Trusted Sources</h4>
-                <p class="text-muted">
-                  We curate articles from reputable outlets like The Guardian, BBC, and AP to ensure you get accurate and reliable news.
-                </p>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="card feature-card p-4 border-0 shadow-sm text-center">
-                <h4 class="mb-3">Audio Narration</h4>
-                <p class="text-muted">
-                  Listen to news in multiple languages with our advanced audio narration feature, perfect for on-the-go updates.
-                </p>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="card feature-card p-4 border-0 shadow-sm text-center">
-                <h4 class="mb-3">Daily Sudoku</h4>
-                <p class="text-muted">
-                  Challenge your brain with a new Sudoku puzzle every day, available online or printable for offline fun.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <hr class="section-separator my-5">
-
-      <!-- About Section -->
-      <section id="about" class="about-section">
-        <div class="container">
-          <h3 class="section-title text-center">About REALTalk</h3>
-          <div class="row align-items-center">
-            <div class="col-md-6">
-              <p class="text-muted mb-4">
-                REALTalk is a modern digital journal bringing you world, business, technology, and science news — with audio narration, powered by AI. Founded in 2025, our mission is to make news accessible for all, through innovative voice-based delivery and community features.
-              </p>
-              <p class="text-muted mb-4">
-                REALTalk is more than just a news platform—it's a community-driven space designed to inform and inspire. Our mission is to make quality journalism accessible to everyone, whether you prefer reading in-depth articles or listening to concise audio summaries. We prioritize user experience with a clean, ad-supported interface and interactive features like commenting and sharing.
-              </p>
-              <p class="text-muted">
-                Subscribe to our weekly newsletter for curated news updates, explore categories like World, Business, Technology, and Science, or test your logic with our daily Sudoku puzzles.
-              </p>
-            </div>
-            <div class="col-md-6 text-center">
-              <img src="/static/images/og-image.jpg" alt="REALTalk Mission" class="img-fluid rounded" style="max-height: 300px; object-fit: cover;">
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <hr class="section-separator my-5">
-
-      <!-- Contact Section -->
-      <section id="contact" class="contact-section">
-        <div class="container">
-          <h3 class="section-title text-center">Contact Us</h3>
-          <div class="row justify-content-center">
-            <div class="col-md-8 col-lg-6">
-              <div class="contact-card text-center">
-                <h4 class="mb-3">Get in Touch</h4>
-                <p class="text-muted mb-4">
-                  You can contact the REALTalk editorial team for any inquiries, suggestions, or support via email:
-                </p>
-                <p class="contact-email">
-                  <strong>Email:</strong> 
-                  <a href="mailto:newsdesk@newsnap.space">newsdesk@newsnap.space</a>
-                </p>
-                <p class="text-muted mt-4 small">
-                  We aim to respond to all inquiries within 24-48 hours during business days.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <hr class="section-separator my-5">
-
-      <section class="sudoku-section text-center">
-        <div class="container">
-          <h3 class="sudoku-title">Daily Sudoku Challenge</h3>
-          <p class="text-muted mb-4">
-            Daily Sudoku, just like in the classic newspapers.
-          </p>
-        </div>
-      </section>
-
-     
-    </main>
-
-    <!-- Search Modal -->
-    <div class="modal fade" id="searchModal" tabindex="-1" aria-labelledby="searchModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="searchModalLabel">Search REALTalk</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <input type="text" class="form-control" id="searchInput" placeholder="Search news articles..." maxlength="100">
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-dark" id="searchSubmitBtn">Search</button>
-          </div>
-        </div>
+  <!-- Navigation -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">
+        REALTalk
+      </a>
+      <ul class="nav-links">
+        <li><a href="#" class="nav-link active">Home</a></li>
+        <li><a href="#about" class="nav-link">About</a></li>
+        <li><a href="#contact" class="nav-link">Contact</a></li>
+        <li><a href="#" class="nav-link">Subscribe</a></li>
+      </ul>
+      <div class="mobile-menu">
+        <span></span>
+        <span></span>
+        <span></span>
       </div>
     </div>
+  </nav>
 
-    <!-- Newsletter Modal -->
-    <div class="modal fade" id="newsletterModal" tabindex="-1" aria-labelledby="newsletterModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content p-3">
-          <form id="newsletterForm">
-            <div class="modal-header py-2">
-              <h6 class="modal-title w-100 text-center" id="newsletterModalLabel">
-                Subscribe to our Newsletter<br>
-                <small class="text-muted">Weekly trusted news in your inbox</small>
-              </h6>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.8rem;"></button>
-            </div>
-            <div class="modal-body py-2">
-              <div class="mb-2">
-                <label for="newsletterName" class="form-label small">Full Name</label>
-                <input type="text" class="form-control form-control-sm" id="newsletterName" name="name" required minlength="2" maxlength="100" placeholder="Your name">
-              </div>
-              <div class="mb-2">
-                <label for="newsletterEmail" class="form-label small">Email</label>
-                <input type="email" class="form-control form-control-sm" id="newsletterEmail" name="email" required placeholder="Your email">
-              </div>
-              <div class="mb-2">
-                <label class="form-label small">Topics you like:</label>
-                <div class="row row-cols-2 g-1 small">
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="general" id="catGeneral" name="categories">
-                      <label class="form-check-label" for="catGeneral">📰 General</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="world" id="catWorld" name="categories">
-                      <label class="form-check-label" for="catWorld">🌍 World</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="business" id="catBusiness" name="categories">
-                      <label class="form-check-label" for="catBusiness">💰 Business</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="technology" id="catTechnology" name="categories">
-                      <label class="form-check-label" for="catTechnology">🤖 Tech</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="sports" id="catSports" name="categories">
-                      <label class="form-check-label" for="catSports">🏀 Sports</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="entertainment" id="catEntertainment" name="categories">
-                      <label class="form-check-label" for="catEntertainment">🎬 Entertain.</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="health" id="catHealth" name="categories">
-                      <label class="form-check-label" for="catHealth">🏥 Health</label>
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="science" id="catScience" name="categories">
-                      <label class="form-check-label" for="catScience">🚀 Science</label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="modal-footer justify-content-between py-2">
-              <button type="submit" class="btn btn-dark btn-sm w-50">Subscribe</button>
-              <button type="button" class="btn btn-secondary btn-sm w-25" data-bs-dismiss="modal">Close</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+  <div>
 
-    <!-- FAQ Button -->
-    <button id="faqButton" title="Frequently Asked Questions">FAQ</button>
 
-    <!-- FAQ Box -->
-    <div id="faqBox">
-      <div id="faqHeader">
-        <span class="faq-title">FREQUENTLY ASKED</span>
-        <button id="faqClose" title="Close">&times;</button>
-      </div>
-      <div id="faqMessages">
-        <div class="faq-message bot-message">
-          <div class="message-content">
-            <strong>REALTalk FAQ</strong><br>
-            Find answers to common questions below.
-          </div>
-        </div>
-      </div>
-      <div id="faqFooter">
-        <button class="faq-question" data-reply="REALTalk is a clean news platform. Read or listen to trusted articles, enjoy daily Sudoku puzzles, and get weekly updates via our newsletter.">
-          What is REALTalk?
-        </button>
-        <button class="faq-question" data-reply="We use trusted sources like The Guardian, BBC, AP, and others known for reliable reporting.">
-          How do you choose news sources?
-        </button>
-        <button class="faq-question" data-reply="Yes — you can comment and discuss articles with other readers.">
-          Can I interact with other readers?
-        </button>
-        <button class="faq-question" data-reply="Our daily Sudoku puzzles are available in easy, medium, and hard levels. Play online or print them for offline solving.">
-          What are the Sudoku puzzles like?
-        </button>
-        <button class="faq-question" data-reply="Absolutely! Use the feedback form below to let us know what you'd like to see.">
-          Can I suggest a new feature or source?
-        </button>
-        <button class="faq-question" data-reply="Use the form below to share feedback, ideas, or report issues. We're listening.">
-          Send Feedback
-        </button>
-        <div id="feedbackSection" style="display: none;">
-          <div class="feedback-divider">───</div>
-          <textarea 
-            id="feedbackInput" 
-            placeholder="Share your thoughts, suggestions, or report issues..."
-            maxlength="500"
-            rows="3"
-          ></textarea>
-          <div class="feedback-actions">
-            <button id="feedbackCancel" class="btn-text">Cancel</button>
-            <button id="feedbackSubmit" class="btn-submit">Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    ..
 
-    <footer class="journal-footer text-center py-4 mt-5">
-      <hr class="footer-separator">
-      <small class="text-muted">
-        © 2025 REALTalk • 
-        <a href="/privacy-policy" class="text-muted text-decoration-none">Privacy Policy</a> • 
-        <a href="/terms-of-service" class="text-muted text-decoration-none">Terms of Use</a>
-      </small>
-    </footer>
+    <div class=""></div>
   </div>
+  <!-- Hero Section -->
+  <section class="hero" id="hero">
+    <div class="hero-bg"></div>
+    <div class="floating-elements" id="floatingElements"></div>
+    
+    <div class="hero-content">
+      <div class="hero-badge">✨ Now with AI-Powered Audio Narration</div>
+      <h1 class="hero-title">REALTalk</h1>
+      <p class="hero-subtitle">The Digital Journal You Can Listen To</p>
+      <p class="hero-description">
+        Experience news like never before. Read trusted articles from world-class sources or listen to AI-powered narrations in your preferred language. Stay informed, engage with our community, and challenge your mind daily.
+      </p>
+      <div class="cta-buttons">
+        <a href="/news" class="btn-primary">Explore News Now</a>
+        <a href="#features" class="btn-secondary">Learn More</a>
+      </div>
+    </div>
+  </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="{{ url_for('static', filename='js/news.js') }}"></script>
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="features-container">
+      <div class="scroll-reveal">
+        <h2 class="section-title">Why Choose REALTalk?</h2>
+        <p class="section-subtitle">
+          Cutting-edge technology meets trusted journalism to deliver news experiences tailored for the modern world.
+        </p>
+      </div>
+      
+      <div class="features-grid">
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">📰</div>
+          <h3 class="feature-title">Trusted Sources</h3>
+          <p class="feature-description">
+            Curated articles from reputable outlets like The Guardian, BBC, and AP ensure you receive accurate, reliable news every time.
+          </p>
+        </div>
+        
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">🎧</div>
+          <h3 class="feature-title">AI Audio Narration</h3>
+          <p class="feature-description">
+            Revolutionary AI-powered audio narration in multiple languages. Perfect for busy lifestyles and accessibility needs.
+          </p>
+        </div>
+        
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">🧩</div>
+          <h3 class="feature-title">Daily Brain Training</h3>
+          <p class="feature-description">
+            Challenge yourself with expertly crafted Sudoku puzzles. Available online or printable for your convenience.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
 
+  <!-- Stats Section -->
+  <section class="stats" id="stats">
+    <div class="stats-container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-number" data-target="10000">0</span>
+          <span class="stat-label">sources worldwide</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number" data-target="6">0</span>
+          <span class="stat-label">Languages Supported</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section class="about" id="about">
+    <div class="about-container">
+      <div class="about-content scroll-reveal">
+        <h2>Redefining Digital Journalism</h2>
+        <p>
+          REALTalk represents the future of news consumption. Founded in 2025, we bridge the gap between traditional journalism and modern technology, creating an accessible platform for everyone.
+        </p>
+        <p>
+          Our AI-powered audio narration system makes news accessible to busy professionals, visually impaired users, and anyone who prefers listening to reading. With support for multiple languages and a clean, distraction-free interface, REALTalk delivers information that matters.
+        </p>
+        <p>
+          Join our growing community of informed readers who value quality journalism, innovative technology, and engaging daily challenges.
+        </p>
+      </div>
+      <div class="about-visual scroll-reveal">
+        <div class="pulse-animation"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section class="contact" id="contact">
+    <div class="contact-container scroll-reveal">
+      <h2>Get in Touch</h2>
+      <p>
+        Have questions, suggestions, or feedback? Our editorial team is here to help and would love to hear from you.
+      </p>
+      <div class="contact-card">
+        <a href="mailto:newsdesk@newsnap.space" class="contact-email">
+          newsdesk@newsnap.space
+        </a>
+        <p style="margin-top: 1rem; color: var(--medium-grey); font-size: 0.9rem;">
+          We respond to all inquiries within 24-48 hours
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-links">
+        <a href="/privacy-policy">Privacy Policy</a>
+        <a href="/terms-of-service">Terms of Service</a>
+        <a href="#contact">Contact</a>
+        <a href="#">Support</a>
+      </div>
+      <p class="footer-copyright">
+        © 2025 REALTalk. All rights reserved.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Navbar scroll effect
+    window.addEventListener('scroll', () => {
+      const navbar = document.getElementById('navbar');
+      if (window.scrollY > 50) {
+        navbar.classList.add('scrolled');
+      } else {
+        navbar.classList.remove('scrolled');
+      }
+    });
+
+    // Floating elements animation
+    function createFloatingElement() {
+      const element = document.createElement('div');
+      element.className = 'floating-element';
+      element.style.left = Math.random() * 100 + '%';
+      element.style.width = element.style.height = (Math.random() * 20 + 10) + 'px';
+      element.style.animationDuration = (Math.random() * 15 + 10) + 's';
+      element.style.animationDelay = Math.random() * 5 + 's';
+      
+      document.getElementById('floatingElements').appendChild(element);
+      
+      setTimeout(() => {
+        element.remove();
+      }, 25000);
+    }
+
+    // Create floating elements periodically
+    setInterval(createFloatingElement, 2000);
+
+    // Scroll reveal animation
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, observerOptions);
+
+    // Observe all scroll-reveal elements
+    document.querySelectorAll('.scroll-reveal').forEach(el => {
+      observer.observe(el);
+    });
+
+    // Animated counters for stats
+    function animateCounter(element) {
+      const target = parseInt(element.getAttribute('data-target'));
+      const increment = target / 100;
+      let count = 0;
+      
+      const timer = setInterval(() => {
+        count += increment;
+        if (count >= target) {
+          count = target;
+          clearInterval(timer);
+        }
+        element.textContent = Math.floor(count).toLocaleString();
+      }, 20);
+    }
+
+    // Stats counter observer
+    const statsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const statNumber = entry.target.querySelector('.stat-number');
+          if (statNumber && !statNumber.classList.contains('animated')) {
+            statNumber.classList.add('animated');
+            animateCounter(statNumber);
+          }
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.5 });
+
+    document.querySelectorAll('.stat-item').forEach(el => {
+      statsObserver.observe(el);
+    });
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Mobile menu toggle (basic implementation)
+    document.querySelector('.mobile-menu').addEventListener('click', function() {
+      this.classList.toggle('active');
+      // Add mobile menu functionality here
+    });
+
+    // Add parallax effect to hero background
+    window.addEventListener('scroll', () => {
+      const scrolled = window.pageYOffset;
+      const parallax = document.querySelector('.hero-bg');
+      if (parallax) {
+        parallax.style.transform = `translateY(${scrolled * 0.5}px)`;
+      }
+    });
+
+    // Add hover effect to feature cards
+    document.querySelectorAll('.feature-card').forEach(card => {
+      card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-8px) scale(1.02)';
+      });
+      
+      card.addEventListener('mouseleave', function() {
+        this.style.transform = 'translateY(0) scale(1)';
+      });
+    });
+
+    // Add typing effect to hero title (optional enhancement)
+    function typeWriter(element, text, speed = 100) {
+      let i = 0;
+      element.innerHTML = '';
+      function typing() {
+        if (i < text.length) {
+          element.innerHTML += text.charAt(i);
+          i++;
+          setTimeout(typing, speed);
+        }
+      }
+      typing();
+    }
+
+    // Initialize animations when page loads
+    window.addEventListener('load', () => {
+      // Add any additional initialization here
+      console.log('REALTalk loaded successfully');
+    });
+
+    // Add intersection observer for better performance
+    if ('IntersectionObserver' in window) {
+      const fadeInElements = document.querySelectorAll('.feature-card, .stat-item');
+      
+      const fadeInObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+          }
+        });
+      });
+
+      fadeInElements.forEach(el => {
+        fadeInObserver.observe(el);
+      });
+    }
+  </script>
 </body>
 </html>
