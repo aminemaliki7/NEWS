@@ -157,6 +157,15 @@
       </section>
 
       <section id="newsList" class="news-grid row">
+        <ins class="adsbygoogle"
+     style="display:block"
+     data-ad-client="{{ config.GOOGLE_ADS_CLIENT }}"
+     data-ad-slot="pub-1955463530202020"
+     data-ad-format="auto"
+     data-full-width-responsive="true"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
         {% for article in articles %}
           <article class="news-article col-12 col-md-6 col-lg-4 mb-3 d-flex">
             <div class="card d-flex flex-column h-100 w-100 p-3 shadow-sm border-0 text-center">
@@ -561,198 +570,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/news.js') }}"></script>
-  <script>
-    if (window.location.hostname !== 'localhost' && 
-        window.location.hostname !== '127.0.0.1') {
-      console.log = console.warn = console.error = function() {};
-    }
 
-    // User Tracking System
-    class UserTracker {
-      constructor() {
-        this.sessionId = this.generateSessionId();
-        this.startTime = Date.now();
-        this.lastActivity = Date.now();
-        this.pageViews = 1;
-        this.hasTrackedVisit = false;
-        this.init();
-      }
-
-      generateSessionId() {
-        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      }
-
-      init() {
-        this.trackPageVisit();
-        this.setupActivityTracking();
-        this.setupVisibilityTracking();
-        this.setupUnloadTracking();
-      }
-
-      async trackPageVisit() {
-        if (this.hasTrackedVisit) return;
-        try {
-          const trackingData = {
-            page_url: window.location.href,
-            page_title: document.title,
-            referrer: document.referrer || '',
-            user_agent: navigator.userAgent,
-            screen_resolution: `${screen.width}x${screen.height}`,
-            viewport_size: `${window.innerWidth}x${window.innerHeight}`,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            language: navigator.language,
-            session_id: this.sessionId,
-            timestamp: new Date().toISOString()
-          };
-          const response = await fetch('/api/track-visit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(trackingData)
-          });
-          if (response.ok) {
-            const result = await response.json();
-            console.log('Visit tracked:', result.visitor_id);
-            this.hasTrackedVisit = true;
-            sessionStorage.setItem('visitor_id', result.visitor_id);
-            sessionStorage.setItem('returning_visitor', result.returning_visitor);
-          }
-        } catch (error) {
-          console.warn('Failed to track visit:', error);
-        }
-      }
-
-      setupActivityTracking() {
-        const events = ['click', 'scroll', 'keypress', 'mousemove', 'touchstart'];
-        events.forEach(event => {
-          document.addEventListener(event, () => {
-            this.lastActivity = Date.now();
-          }, { passive: true });
-        });
-        setInterval(() => {
-          this.sendHeartbeat();
-        }, 30000);
-      }
-
-      setupVisibilityTracking() {
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden) {
-            this.trackPageExit();
-          } else {
-            this.trackPageReturn();
-          }
-        });
-      }
-
-      setupUnloadTracking() {
-        window.addEventListener('beforeunload', () => {
-          this.trackPageExit(true);
-        });
-      }
-
-      async sendHeartbeat() {
-        const timeOnPage = Date.now() - this.startTime;
-        const timeSinceActivity = Date.now() - this.lastActivity;
-        if (timeSinceActivity > 120000) return;
-        try {
-          const heartbeatData = {
-            session_id: this.sessionId,
-            time_on_page: timeOnPage,
-            page_url: window.location.href,
-            last_activity: timeSinceActivity,
-            is_active: timeSinceActivity < 10000
-          };
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon('/api/track-heartbeat', JSON.stringify(heartbeatData));
-          } else {
-            fetch('/api/track-heartbeat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(heartbeatData)
-            }).catch(() => {});
-          }
-        } catch (error) {}
-      }
-
-      trackPageExit(isUnload = false) {
-        const sessionData = {
-          session_id: this.sessionId,
-          total_time: Date.now() - this.startTime,
-          page_views: this.pageViews,
-          final_url: window.location.href,
-          exit_type: isUnload ? 'unload' : 'visibility_change'
-        };
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon('/api/track-session-end', JSON.stringify(sessionData));
-        }
-      }
-
-      trackPageReturn() {
-        this.lastActivity = Date.now();
-      }
-
-      trackEvent(eventName, eventData = {}) {
-        const trackingData = {
-          event_name: eventName,
-          event_data: eventData,
-          session_id: this.sessionId,
-          page_url: window.location.href,
-          timestamp: new Date().toISOString()
-        };
-        fetch('/api/track-event', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(trackingData)
-        }).catch(() => {});
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      window.userTracker = new UserTracker();
-      // Track flash message interactions
-      document.querySelector('.home-flash .home-link')?.addEventListener('click', () => {
-        window.userTracker?.trackEvent('home_flash_click');
-      });
-      document.querySelector('.home-flash .btn-close')?.addEventListener('click', () => {
-        window.userTracker?.trackEvent('home_flash_dismiss');
-      });
-    });
-
-    document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('article-listen-btn')) {
-        window.userTracker?.trackEvent('article_listen', {
-          article_title: e.target.closest('.card').querySelector('.article-title')?.textContent
-        });
-      }
-      if (e.target.classList.contains('article-read-btn')) {
-        window.userTracker?.trackEvent('article_read', {
-          article_url: e.target.href
-        });
-      }
-      if (e.target.classList.contains('like-btn')) {
-        window.userTracker?.trackEvent('article_like');
-      }
-      if (e.target.classList.contains('comment-btn')) {
-        window.userTracker?.trackEvent('comment_toggle');
-      }
-      if (e.target.classList.contains('share-btn')) {
-        window.userTracker?.trackEvent('article_share');
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('category-link')) {
-        window.userTracker?.trackEvent('category_change', {
-          category: e.target.dataset.category
-        });
-      }
-    });
-
-    document.getElementById('searchBtn')?.addEventListener('click', () => {
-      const query = document.getElementById('searchQuery')?.value;
-      if (query) {
-        window.userTracker?.trackEvent('search', { query: query });
-      }
-    });
-  </script>
 </body>
 </html>
