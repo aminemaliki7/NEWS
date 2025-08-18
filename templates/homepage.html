@@ -54,7 +54,7 @@
     }
     
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
       line-height: 1.6;
       color: var(--secondary-black);
       background: var(--white);
@@ -68,17 +68,17 @@
     
     /* Navigation */
     .navbar {
-      position: fixed;
-      top: 0;
-      width: 100%;
-      z-index: 1000;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-      padding: 1rem 0;
-      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 0.666 rem 0; /* Reduced from 1rem */
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
     
     .navbar.scrolled {
       padding: 0.5rem 0;
@@ -690,36 +690,50 @@
       opacity: 1;
       transform: translateY(0);
     }
+    .nav-logo-img {
+  height: 50px;
+  width: auto; /* This maintains the aspect ratio */
+  transition: height 0.3s ease; /* Adds a smooth resizing animation */
+}
+
+.navbar.scrolled .nav-logo-img {
+  height: 40px; /* Reduces size when the user scrolls down */
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .nav-logo-img {
+    height: 50px; /* A smaller default size for mobile */
+  }
+  .navbar.scrolled .nav-logo-img {
+    height: 30px; /* Even smaller when scrolled on mobile */
+  }
+}
   </style>
 </head>
 
 <body>
   <!-- Navigation -->
-  <nav class="navbar" id="navbar">
-    <div class="nav-container">
-      <a href="#" class="nav-logo">
-        REALTalk
-      </a>
-      <ul class="nav-links">
-        <li><a href="#" class="nav-link active">Home</a></li>
-        <li><a href="#about" class="nav-link">About</a></li>
-        <li><a href="#contact" class="nav-link">Contact</a></li>
-        <li><a href="#" class="nav-link">Subscribe</a></li>
-      </ul>
-      <div class="mobile-menu">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+<nav class="navbar" id="navbar">
+  <div class="nav-container">
+    <a href="/" class="nav-logo-link">
+      <img src="/static/images/LOGOB.png" alt="Website Logo" class="nav-logo-img">
+    </a>
+    <ul class="nav-links">
+      <li><a href="#" class="nav-link active">Home</a></li>
+      <li><a href="#about" class="nav-link">About</a></li>
+      <li><a href="#contact" class="nav-link">Contact</a></li>
+      <li><a href="#" class="nav-link">Subscribe</a></li>
+    </ul>
+    <div class="mobile-menu">
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
-  </nav>
+  </div>
+</nav>
 
-  <div>
-
-
-    ..
-
-    <div class=""></div>
+ 
   </div>
   <!-- Hero Section -->
   <section class="hero" id="hero">
@@ -727,7 +741,7 @@
     <div class="floating-elements" id="floatingElements"></div>
     
     <div class="hero-content">
-      <div class="hero-badge">✨ Now with AI-Powered Audio Narration</div>
+      <div class="hero-badge">⚡You become what you consume</div>
       <h1 class="hero-title">REALTalk</h1>
       <p class="hero-subtitle">The Digital Journal You Can Listen To</p>
       <p class="hero-description">
