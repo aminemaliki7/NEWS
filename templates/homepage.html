@@ -709,6 +709,41 @@
     height: 30px; /* Even smaller when scrolled on mobile */
   }
 }
+/* Fix for hero section being covered by fixed navbar */
+.hero {
+  padding-top: 90px; /* Just enough to clear the navbar */
+}
+
+/* Add this to your existing mobile media query section */
+@media (max-width: 768px) {
+  .hero {
+    padding-top: 80px; /* Slightly less on mobile */
+  }
+  
+  .hero-badge {
+    font-size: 0.75rem; /* Smaller font size for mobile */
+    padding: 0.4rem 1rem; /* Reduce padding */
+    margin-bottom: 1.5rem; /* Adjust margin */
+  }
+}
+
+/* Optional: Create a mobile-specific animation with less movement */
+@keyframes slideUpMobile {
+  from {
+    opacity: 0;
+    transform: translateY(15px); /* Less movement on mobile */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Alternative: Force visibility on all screen sizes */
+.hero-badge {
+  display: inline-block !important;
+  visibility: visible !important;
+}
   </style>
 </head>
 
@@ -717,7 +752,7 @@
 <nav class="navbar" id="navbar">
   <div class="nav-container">
     <a href="/" class="nav-logo-link">
-      <img src="/static/images/LOGOB.png" alt="Website Logo" class="nav-logo-img">
+      <img src="/static/images/LOGOB.png" alt="" class="nav-logo-img">
     </a>
     <ul class="nav-links">
       <li><a href="#" class="nav-link active">Home</a></li>
